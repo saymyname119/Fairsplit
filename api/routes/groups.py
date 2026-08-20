@@ -1,4 +1,5 @@
 """api/routes/groups.py — Group endpoints."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
@@ -23,10 +24,7 @@ router = APIRouter()
     response_model=Group,
     responses={201: {"description": "Group created"}},
 )
-async def create_group(
-    request: CreateGroupRequest,
-    db: AsyncSession = Depends(get_db)
-) -> Group:
+async def create_group(request: CreateGroupRequest, db: AsyncSession = Depends(get_db)) -> Group:
     """POST /groups"""
     # For now, hardcode creator_id. In Prompt 3 we add actual auth extraction.
     creator_id = "temp-creator-id"
@@ -59,9 +57,7 @@ async def get_group(group_id: str) -> JSONResponse:
     },
 )
 async def add_member(
-    group_id: str, 
-    request: AddMemberRequest,
-    db: AsyncSession = Depends(get_db)
+    group_id: str, request: AddMemberRequest, db: AsyncSession = Depends(get_db)
 ) -> Group:
     """POST /groups/:id/members"""
     adder_id = "temp-adder-id"

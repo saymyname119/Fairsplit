@@ -1,8 +1,9 @@
 """modules/notification/__init__.py"""
+
 from modules.notification.service import (
     EmailNotifier,
-    INotifier,
     InAppNotifier,
+    INotifier,
     register_notification_handlers,
 )
 

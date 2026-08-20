@@ -10,6 +10,7 @@ Why centralised config?
   - Type safety (Pydantic coerces and validates at startup, not at runtime)
   - Easy to override in tests: `get_settings.cache_clear(); os.environ["X"] = "Y"`
 """
+
 from __future__ import annotations
 
 from functools import lru_cache

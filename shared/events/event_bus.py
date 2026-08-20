@@ -28,12 +28,14 @@ Production mitigation options (pick one at Prompt 3/5):
   Option B: Wrap handlers in asyncio.create_task() for fire-and-forget within the
             same process (simpler, but no durability guarantee on crash).
 """
+
 from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from typing import Callable, TypeAlias
+from collections.abc import Callable
+from typing import TypeAlias
 
 from shared.events.base import DomainEvent
 

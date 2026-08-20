@@ -15,6 +15,7 @@ Why async?
   with a small thread pool. In practice this matters most for balance reads
   under load (Prompt 3).
 """
+
 from __future__ import annotations
 
 import logging

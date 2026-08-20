@@ -24,10 +24,11 @@ Rounding: any split arithmetic that produces a fraction is rounded to 4 decimal
 places using ROUND_HALF_UP. Rounding residuals (the "missing cent" problem) are
 handled in the split strategy layer (see Prompt 2).
 """
+
 from __future__ import annotations
 
 from decimal import Decimal
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import ForeignKey, Numeric, String
@@ -35,24 +36,26 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from shared.db.base import Base, SoftDeleteMixin, TimestampMixin, UUIDPrimaryKeyMixin
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Enums
 # ─────────────────────────────────────────────────────────────────────────────
 
-class SplitType(str, Enum):
+
+class SplitType(StrEnum):
     """
     How an expense is divided among participants.
     Each type maps to a concrete SplitStrategy (implemented in Prompt 2).
     """
-    EQUAL = "equal"       # Amount / N, remainder on first participant
-    PERCENT = "percent"   # Percentages must sum to 100
-    EXACT = "exact"       # Exact amounts must sum to total
+
+    EQUAL = "equal"  # Amount / N, remainder on first participant
+    PERCENT = "percent"  # Percentages must sum to 100
+    EXACT = "exact"  # Exact amounts must sum to total
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ORM Models (private to this module)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class ExpenseORM(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
     """
@@ -69,9 +72,7 @@ class ExpenseORM(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
     paid_by_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("user_accounts.id"), nullable=False, index=True
     )
-    amount: Mapped[Decimal] = mapped_column(
-        Numeric(precision=19, scale=4), nullable=False
-    )
+    amount: Mapped[Decimal] = mapped_column(Numeric(precision=19, scale=4), nullable=False)
     description: Mapped[str] = mapped_column(String(500), nullable=False)
     split_type: Mapped[str] = mapped_column(String(20), nullable=False)
     notes: Mapped[str | None] = mapped_column(String(1000), nullable=True)
@@ -99,20 +100,20 @@ class SplitORM(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     group_id: Mapped[str] = mapped_column(
         # Denormalised for query efficiency: avoids a JOIN to expense_expenses
         # on every balance calculation. This is a deliberate denormalisation.
-        String(36), ForeignKey("group_groups.id"), nullable=False, index=True
+        String(36),
+        ForeignKey("group_groups.id"),
+        nullable=False,
+        index=True,
     )
-    owed_amount: Mapped[Decimal] = mapped_column(
-        Numeric(precision=19, scale=4), nullable=False
-    )
+    owed_amount: Mapped[Decimal] = mapped_column(Numeric(precision=19, scale=4), nullable=False)
     # For PERCENT splits: store the percentage for audit/display purposes
-    percentage: Mapped[Decimal | None] = mapped_column(
-        Numeric(precision=7, scale=4), nullable=True
-    )
+    percentage: Mapped[Decimal | None] = mapped_column(Numeric(precision=7, scale=4), nullable=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Domain Models (public — returned by service facade)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class Split(BaseModel):
     """One participant's share of an expense."""

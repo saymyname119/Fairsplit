@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import abc
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from modules.group.models import (
     AddMemberRequest,
@@ -15,15 +15,13 @@ from modules.group.models import (
     MemberRole,
 )
 from modules.group.repository import GroupRepository
-from shared.events import GroupCreated, MemberAdded, get_event_bus
 from shared.errors import ConflictError, ForbiddenError
+from shared.events import GroupCreated, MemberAdded, get_event_bus
 
 
 class IGroupService(abc.ABC):
     @abc.abstractmethod
-    async def create_group(
-        self, creator_id: str, request: CreateGroupRequest
-    ) -> Group: ...
+    async def create_group(self, creator_id: str, request: CreateGroupRequest) -> Group: ...
 
     @abc.abstractmethod
     async def add_member(
@@ -36,9 +34,7 @@ class GroupService(IGroupService):
         self._repo = GroupRepository(session)
         self._bus = get_event_bus()
 
-    async def create_group(
-        self, creator_id: str, request: CreateGroupRequest
-    ) -> Group:
+    async def create_group(self, creator_id: str, request: CreateGroupRequest) -> Group:
         orm_group = GroupORM(
             name=request.name,
             description=request.description,
@@ -53,7 +49,7 @@ class GroupService(IGroupService):
             role=MemberRole.ADMIN,
         )
         await self._repo.add_member(orm_member)
-        
+
         # We need to re-fetch to load relationships properly for the domain model
         loaded_group = await self._repo.get_by_id_or_raise(orm_group.id)
         domain_group = self._map_to_domain(loaded_group)
@@ -67,10 +63,8 @@ class GroupService(IGroupService):
         )
         return domain_group
 
-    async def add_member(
-        self, group_id: str, adder_id: str, request: AddMemberRequest
-    ) -> Group:
-        group = await self._repo.get_by_id_or_raise(group_id)
+    async def add_member(self, group_id: str, adder_id: str, request: AddMemberRequest) -> Group:
+        await self._repo.get_by_id_or_raise(group_id)
 
         # Ensure the adder is an admin
         adder_member = await self._repo.get_member(group_id, adder_id)
@@ -82,13 +76,13 @@ class GroupService(IGroupService):
             user_id=request.user_id,
             role=request.role,
         )
-        
+
         try:
             await self._repo.add_member(orm_member)
-        except IntegrityError:
+        except IntegrityError as err:
             # Foreign key violation (user doesn't exist) or unique violation
-            raise ConflictError("User is already a member or does not exist")
-            
+            raise ConflictError("User is already a member or does not exist") from err
+
         loaded_group = await self._repo.get_by_id_or_raise(group_id)
         domain_group = self._map_to_domain(loaded_group)
 
@@ -107,15 +101,17 @@ class GroupService(IGroupService):
             # Safely get user info (requires eager loading)
             user_name = m.user.name if getattr(m, "user", None) else "Unknown"
             user_email = m.user.email if getattr(m, "user", None) else "Unknown"
-            
-            members.append(GroupMember(
-                user_id=m.user_id,
-                user_name=user_name,
-                user_email=user_email,
-                role=MemberRole(m.role),
-                joined_at=m.created_at,
-            ))
-            
+
+            members.append(
+                GroupMember(
+                    user_id=m.user_id,
+                    user_name=user_name,
+                    user_email=user_email,
+                    role=MemberRole(m.role),
+                    joined_at=m.created_at,
+                )
+            )
+
         return Group(
             id=orm_group.id,
             name=orm_group.name,

@@ -97,6 +97,7 @@ bus.subscribe(event_type: str, handler: Callable) -> None
 class KafkaEventBus(IEventBus):
     def publish(self, event: DomainEvent) -> None:
         self.producer.send(event.event_type, event)
+
     def subscribe(self, event_type: str, handler: Callable) -> None:
         self.consumer.subscribe([event_type], handler)
 ```

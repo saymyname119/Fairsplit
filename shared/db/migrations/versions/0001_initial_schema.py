@@ -21,6 +21,7 @@ Money columns: DECIMAL(19, 4)
   Chosen for exact arithmetic — no floating point rounding errors.
   See docs/design-decisions.md for full tradeoff discussion.
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa
@@ -68,7 +69,9 @@ def upgrade() -> None:
         sa.Column("id", sa.String(36), primary_key=True),
         sa.Column("name", sa.String(255), nullable=False),
         sa.Column("description", sa.String(1000), nullable=True),
-        sa.Column("created_by_id", sa.String(36), sa.ForeignKey("user_accounts.id"), nullable=False),
+        sa.Column(
+            "created_by_id", sa.String(36), sa.ForeignKey("user_accounts.id"), nullable=False
+        ),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -190,9 +193,7 @@ def upgrade() -> None:
     )
     # Composite index on (group_id, user_id): balance calculation query
     # "all amounts user U owes in group G" — the core ledger read
-    op.create_index(
-        "ix_expense_splits_group_id_user_id", "expense_splits", ["group_id", "user_id"]
-    )
+    op.create_index("ix_expense_splits_group_id_user_id", "expense_splits", ["group_id", "user_id"])
 
     # ──────────────────────────────────────────────────────────────────────
     # ledger_balances
@@ -201,9 +202,7 @@ def upgrade() -> None:
         "ledger_balances",
         sa.Column("id", sa.String(36), primary_key=True),
         sa.Column("group_id", sa.String(36), sa.ForeignKey("group_groups.id"), nullable=False),
-        sa.Column(
-            "creditor_id", sa.String(36), sa.ForeignKey("user_accounts.id"), nullable=False
-        ),
+        sa.Column("creditor_id", sa.String(36), sa.ForeignKey("user_accounts.id"), nullable=False),
         sa.Column("debtor_id", sa.String(36), sa.ForeignKey("user_accounts.id"), nullable=False),
         sa.Column(
             "net_amount",
@@ -249,12 +248,8 @@ def upgrade() -> None:
         "ledger_settlements",
         sa.Column("id", sa.String(36), primary_key=True),
         sa.Column("group_id", sa.String(36), sa.ForeignKey("group_groups.id"), nullable=False),
-        sa.Column(
-            "from_user_id", sa.String(36), sa.ForeignKey("user_accounts.id"), nullable=False
-        ),
-        sa.Column(
-            "to_user_id", sa.String(36), sa.ForeignKey("user_accounts.id"), nullable=False
-        ),
+        sa.Column("from_user_id", sa.String(36), sa.ForeignKey("user_accounts.id"), nullable=False),
+        sa.Column("to_user_id", sa.String(36), sa.ForeignKey("user_accounts.id"), nullable=False),
         sa.Column("amount", sa.Numeric(precision=19, scale=4), nullable=False),
         sa.Column("notes", sa.String(500), nullable=True),
         sa.Column(
@@ -274,9 +269,7 @@ def upgrade() -> None:
     # Index on group_id: "all settlements in group G" for settlement history
     op.create_index("ix_ledger_settlements_group_id", "ledger_settlements", ["group_id"])
     # Index on from_user_id: "payments made by user U"
-    op.create_index(
-        "ix_ledger_settlements_from_user_id", "ledger_settlements", ["from_user_id"]
-    )
+    op.create_index("ix_ledger_settlements_from_user_id", "ledger_settlements", ["from_user_id"])
 
 
 def downgrade() -> None:

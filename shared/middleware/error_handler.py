@@ -8,6 +8,7 @@ Why middleware and not try/except in every route?
   boilerplate. Centralising it means the mapping is in one place, and adding
   a new AppError subclass automatically inherits correct HTTP handling.
 """
+
 from __future__ import annotations
 
 import logging
@@ -51,9 +52,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     Catch-all for unhandled exceptions.
     Returns a generic 500 without leaking internal details to the client.
     """
-    logger.exception(
-        "Unhandled exception on %s %s", request.method, request.url.path
-    )
+    logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
     return JSONResponse(
         status_code=500,
         content={

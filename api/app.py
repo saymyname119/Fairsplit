@@ -14,11 +14,12 @@ Why composition root?
   Concrete classes are only named here. To swap UserService for a mock in tests,
   we override the FastAPI dependency — no other file needs to change.
 """
+
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

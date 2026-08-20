@@ -3,6 +3,7 @@ modules/ai/models.py
 ─────────────────────
 Domain models for the AI / natural language expense parsing module.
 """
+
 from __future__ import annotations
 
 from decimal import Decimal
@@ -14,7 +15,8 @@ from modules.expense.models import SplitType
 
 class ParsedSplitValue(BaseModel):
     """One participant's value in a parsed non-equal split."""
-    name: str   # raw name from LLM — needs resolving to user_id
+
+    name: str  # raw name from LLM — needs resolving to user_id
     value: Decimal  # percentage or exact amount
 
 
@@ -31,7 +33,7 @@ class ParsedExpense(BaseModel):
 
     amount: Decimal
     description: str
-    paid_by_name: str           # resolved to paid_by_id after member lookup
+    paid_by_name: str  # resolved to paid_by_id after member lookup
     paid_by_id: str | None = None  # set after name resolution
     participant_names: list[str]  # raw names from LLM
     participant_ids: list[str] = Field(default_factory=list)  # resolved

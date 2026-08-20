@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Sequence
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -40,10 +38,14 @@ class GroupRepository:
         return group
 
     async def is_member(self, group_id: str, user_id: str) -> bool:
-        stmt = select(GroupMemberORM.id).where(
-            GroupMemberORM.group_id == group_id,
-            GroupMemberORM.user_id == user_id,
-        ).limit(1)
+        stmt = (
+            select(GroupMemberORM.id)
+            .where(
+                GroupMemberORM.group_id == group_id,
+                GroupMemberORM.user_id == user_id,
+            )
+            .limit(1)
+        )
         result = await self._session.execute(stmt)
         return result.first() is not None
 

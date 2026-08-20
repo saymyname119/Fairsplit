@@ -11,6 +11,7 @@ Why reset_event_bus() in each test?
   The event bus is a module-level singleton. If test A subscribes a handler,
   it would persist into test B. reset_event_bus() ensures handler isolation.
 """
+
 from __future__ import annotations
 
 import os

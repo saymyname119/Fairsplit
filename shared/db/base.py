@@ -6,10 +6,11 @@ SQLAlchemy declarative base and common column mixins.
 All ORM models across every module import Base from here.
 This gives Alembic a single place to discover all models for autogenerate.
 """
+
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import DateTime, String, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -38,6 +39,7 @@ class Base(DeclarativeBase):
 # repeating ourselves. Python MRO handles composition cleanly.
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class UUIDPrimaryKeyMixin:
     """Mixin: UUID primary key generated at the application layer (not DB serial)."""
 
@@ -62,7 +64,7 @@ class TimestampMixin:
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
-        onupdate=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
 

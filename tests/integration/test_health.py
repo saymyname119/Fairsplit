@@ -1,9 +1,8 @@
 """tests/integration/test_health.py — Integration test for /healthz endpoint."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
-
-import pytest
 
 
 class TestHealthEndpoint:

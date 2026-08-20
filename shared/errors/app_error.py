@@ -20,6 +20,7 @@ Usage in services
     raise ConflictError("expense already settled") # → 409
     raise DomainError("splits do not sum to total") # → 422
 """
+
 from __future__ import annotations
 
 

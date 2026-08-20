@@ -1,4 +1,5 @@
 """modules/ai/service.py — AI module public facade."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

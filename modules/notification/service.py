@@ -3,7 +3,7 @@ from __future__ import annotations
 import abc
 import logging
 
-from shared.events import DomainEvent, ExpenseCreated, SettlementRecorded, MemberAdded, GroupCreated
+from shared.events import DomainEvent, ExpenseCreated, MemberAdded, SettlementRecorded
 
 logger = logging.getLogger(__name__)
 
@@ -32,28 +32,23 @@ class EmailNotifier(INotifier):
         for split in event.splits:
             if split.user_id == event.paid_by_id:
                 continue
-                
+
             # Note: In a real app we'd fetch the user's email address here
-            email_body = f"""
-            Hi {split.user_id},
-            
-            A new expense "{event.description}" was added to group {event.group_id}.
-            You owe ${split.owed_amount:.2f}.
-            
-            Thanks,
-            Splitwise Clone Team
-            """
+            email_body = (
+                f"Hi {split.user_id},\n\n"
+                f'A new expense "{event.description}" was added to group {event.group_id}.\n'
+                f"You owe ${split.owed_amount:.2f}.\n\n"
+                "Thanks,\nSplitwise Clone Team"
+            )
             logger.info(f"EMAIL TO {split.user_id}:\n{email_body}")
 
     async def _send_settlement_email(self, event: SettlementRecorded) -> None:
-        email_body = f"""
-        Hi {event.to_user_id},
-        
-        You received a payment of ${event.amount:.2f} from {event.from_user_id} in group {event.group_id}.
-        
-        Thanks,
-        Splitwise Clone Team
-        """
+        email_body = (
+            f"Hi {event.to_user_id},\n\n"
+            f"You received a payment of ${event.amount:.2f} from {event.from_user_id} "
+            f"in group {event.group_id}.\n\n"
+            "Thanks,\nSplitwise Clone Team"
+        )
         logger.info(f"EMAIL TO {event.to_user_id}:\n{email_body}")
 
 
@@ -67,11 +62,20 @@ class InAppNotifier(INotifier):
         if isinstance(event, ExpenseCreated):
             for split in event.splits:
                 if split.user_id != event.paid_by_id:
-                    logger.info(f"PUSH NOTIFICATION to {split.user_id}: You owe ${split.owed_amount:.2f} for {event.description}")
+                    msg = (
+                        f"PUSH NOTIFICATION to {split.user_id}: "
+                        f"You owe ${split.owed_amount:.2f} for {event.description}"
+                    )
+                    logger.info(msg)
         elif isinstance(event, SettlementRecorded):
-            logger.info(f"PUSH NOTIFICATION to {event.to_user_id}: {event.from_user_id} paid you ${event.amount:.2f}")
+            msg = (
+                f"PUSH NOTIFICATION to {event.to_user_id}: "
+                f"{event.from_user_id} paid you ${event.amount:.2f}"
+            )
+            logger.info(msg)
         elif isinstance(event, MemberAdded):
-            logger.info(f"PUSH NOTIFICATION to {event.user_id}: You were added to group {event.group_id}")
+            msg = f"PUSH NOTIFICATION to {event.user_id}: You were added to group {event.group_id}"
+            logger.info(msg)
 
 
 def register_notification_handlers(bus) -> None:

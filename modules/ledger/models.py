@@ -23,6 +23,7 @@ Settlement table:
   A settlement is a financial event (money changed hands) — we soft-delete
   expenses, but settlements are immutable records once recorded.
 """
+
 from __future__ import annotations
 
 from decimal import Decimal
@@ -33,10 +34,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from shared.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # ORM Models (private to this module)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class LedgerBalanceORM(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     """
@@ -59,7 +60,9 @@ class LedgerBalanceORM(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "ledger_balances"
     __table_args__ = (
         UniqueConstraint(
-            "group_id", "creditor_id", "debtor_id",
+            "group_id",
+            "creditor_id",
+            "debtor_id",
             name="uq_ledger_balances_group_creditor_debtor",
         ),
     )
@@ -96,15 +99,14 @@ class SettlementORM(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     to_user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("user_accounts.id"), nullable=False, index=True
     )
-    amount: Mapped[Decimal] = mapped_column(
-        Numeric(precision=19, scale=4), nullable=False
-    )
+    amount: Mapped[Decimal] = mapped_column(Numeric(precision=19, scale=4), nullable=False)
     notes: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Domain Models (public)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class Balance(BaseModel):
     """Net balance between two users in a group."""
@@ -124,8 +126,8 @@ class SimplifiedDebt(BaseModel):
     payments needed to settle the entire group.
     """
 
-    from_user_id: str   # pays
-    to_user_id: str     # receives
+    from_user_id: str  # pays
+    to_user_id: str  # receives
     amount: Decimal
 
 
@@ -168,6 +170,6 @@ class UserBalance(BaseModel):
 
 class SimplifiedBalanceResult(BaseModel):
     """Result of the greedy net-flow simplification algorithm."""
-    
+
     simplified: list[SimplifiedDebt]
     net_by_user: dict[str, Decimal]

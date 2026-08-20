@@ -1,4 +1,5 @@
 """modules/expense/__init__.py"""
+
 from modules.expense.models import (
     CreateExpenseRequest,
     Expense,
@@ -9,7 +10,11 @@ from modules.expense.models import (
 from modules.expense.service import ExpenseService, IExpenseService
 
 __all__ = [
-    "Expense", "Split", "SplitInput", "SplitType",
+    "Expense",
+    "Split",
+    "SplitInput",
+    "SplitType",
     "CreateExpenseRequest",
-    "IExpenseService", "ExpenseService",
+    "IExpenseService",
+    "ExpenseService",
 ]

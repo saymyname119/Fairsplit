@@ -1,4 +1,5 @@
 """api/routes/users.py — User endpoints."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
@@ -22,10 +23,7 @@ router = APIRouter()
         409: {"description": "Email already exists"},
     },
 )
-async def create_user(
-    request: CreateUserRequest,
-    db: AsyncSession = Depends(get_db)
-) -> User:
+async def create_user(request: CreateUserRequest, db: AsyncSession = Depends(get_db)) -> User:
     """
     POST /users
     Register a new user account.
@@ -43,10 +41,7 @@ async def create_user(
         404: {"description": "User not found"},
     },
 )
-async def get_user(
-    user_id: str,
-    db: AsyncSession = Depends(get_db)
-) -> User:
+async def get_user(user_id: str, db: AsyncSession = Depends(get_db)) -> User:
     """GET /users/:id — return user profile."""
     service = UserService(db)
     return await service.get_user(user_id)

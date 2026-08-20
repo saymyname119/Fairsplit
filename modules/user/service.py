@@ -1,19 +1,18 @@
 from __future__ import annotations
 
 import abc
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from jose import JWTError, jwt
 from passlib.hash import bcrypt
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from modules.user.models import (
     AuthTokens,
     CreateUserRequest,
     LoginRequest,
     RefreshTokenRequest,
-    UpdateUserRequest,
     User,
     UserORM,
 )
@@ -24,16 +23,16 @@ from shared.errors import AuthenticationError, ConflictError
 
 class IUserService(abc.ABC):
     """Facade for the User module."""
-    
+
     @abc.abstractmethod
     async def create_user(self, request: CreateUserRequest) -> User: ...
-    
+
     @abc.abstractmethod
     async def authenticate(self, request: LoginRequest) -> AuthTokens: ...
 
     @abc.abstractmethod
     async def refresh_token(self, request: RefreshTokenRequest) -> AuthTokens: ...
-    
+
     @abc.abstractmethod
     async def get_user(self, user_id: str) -> User: ...
 
@@ -58,15 +57,15 @@ class UserService(IUserService):
         try:
             created = await self._repo.create(orm_user)
             return User.model_validate(created)
-        except IntegrityError:
-            raise ConflictError("Email already exists")
+        except IntegrityError as err:
+            raise ConflictError("Email already exists") from err
 
     async def authenticate(self, request: LoginRequest) -> AuthTokens:
         user = await self._repo.get_by_email(request.email)
         if not user or not bcrypt.verify(request.password, user.hashed_password):
             # Same error for not found and wrong password (no user enum)
             raise AuthenticationError("Invalid email or password")
-        
+
         if not user.is_active:
             raise AuthenticationError("User account is disabled")
 
@@ -77,28 +76,28 @@ class UserService(IUserService):
             payload = jwt.decode(
                 request.refresh_token,
                 self._settings.jwt_secret,
-                algorithms=[self._settings.jwt_algorithm]
+                algorithms=[self._settings.jwt_algorithm],
             )
             token_type = payload.get("type")
             if token_type != "refresh":
                 raise AuthenticationError("Invalid token type")
-            
+
             user_id = payload.get("sub")
             email = payload.get("email")
             if not user_id or not email:
                 raise AuthenticationError("Invalid token payload")
-                
+
             return self._generate_tokens(user_id, email)
-        except JWTError:
-            raise AuthenticationError("Invalid or expired refresh token")
+        except JWTError as err:
+            raise AuthenticationError("Invalid or expired refresh token") from err
 
     async def get_user(self, user_id: str) -> User:
         orm_user = await self._repo.get_by_id_or_raise(user_id)
         return User.model_validate(orm_user)
 
     def _generate_tokens(self, user_id: str, email: str) -> AuthTokens:
-        now = datetime.now(timezone.utc)
-        
+        now = datetime.now(UTC)
+
         access_exp = now + timedelta(minutes=self._settings.jwt_expiry_minutes)
         access_payload = {
             "sub": user_id,
@@ -107,12 +106,10 @@ class UserService(IUserService):
             "type": "access",
         }
         access_token = jwt.encode(
-            access_payload, 
-            self._settings.jwt_secret, 
-            algorithm=self._settings.jwt_algorithm
+            access_payload, self._settings.jwt_secret, algorithm=self._settings.jwt_algorithm
         )
 
-        refresh_exp = now + timedelta(days=7) # Hardcoded 7 days for refresh
+        refresh_exp = now + timedelta(days=7)  # Hardcoded 7 days for refresh
         refresh_payload = {
             "sub": user_id,
             "email": email,
@@ -120,9 +117,7 @@ class UserService(IUserService):
             "type": "refresh",
         }
         refresh_token = jwt.encode(
-            refresh_payload,
-            self._settings.jwt_secret,
-            algorithm=self._settings.jwt_algorithm
+            refresh_payload, self._settings.jwt_secret, algorithm=self._settings.jwt_algorithm
         )
 
         return AuthTokens(

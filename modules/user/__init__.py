@@ -1,8 +1,9 @@
 """modules/user/__init__.py — public interface for the user module."""
+
 from modules.user.models import (
+    AuthTokens,
     CreateUserRequest,
     LoginRequest,
-    AuthTokens,
     RefreshTokenRequest,
     UpdateUserRequest,
     User,

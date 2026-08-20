@@ -1,4 +1,5 @@
 """api/routes/health.py — GET /healthz endpoint."""
+
 from __future__ import annotations
 
 import logging

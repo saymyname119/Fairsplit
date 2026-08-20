@@ -1,4 +1,5 @@
 """api/routes/ai.py — AI / natural language expense parsing endpoint."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter

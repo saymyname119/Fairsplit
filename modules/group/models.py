@@ -3,10 +3,12 @@ modules/group/models.py
 ────────────────────────
 Domain and ORM models for the Group module.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 from sqlalchemy import ForeignKey, String, UniqueConstraint
@@ -14,10 +16,13 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.db.base import Base, SoftDeleteMixin, TimestampMixin, UUIDPrimaryKeyMixin
 
+if TYPE_CHECKING:
+    from modules.user.models import UserORM
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ORM Models (private to this module)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class GroupORM(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
     """
@@ -42,9 +47,10 @@ class GroupORM(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
     )
 
 
-class MemberRole(str, Enum):
+class MemberRole(StrEnum):
     """Member roles within a group."""
-    ADMIN = "admin"    # Can add/remove members, delete the group
+
+    ADMIN = "admin"  # Can add/remove members, delete the group
     MEMBER = "member"  # Can add expenses, view balances
 
 
@@ -75,12 +81,13 @@ class GroupMemberORM(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     group: Mapped[GroupORM] = relationship("GroupORM", back_populates="members")
     # String reference to avoid circular imports. UserORM is in modules.user.models.
-    user: Mapped["UserORM"] = relationship("UserORM", foreign_keys=[user_id], lazy="joined")
+    user: Mapped[UserORM] = relationship("UserORM", foreign_keys=[user_id], lazy="joined")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Domain Models (public — returned by service facade)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class GroupMember(BaseModel):
     """A user's membership record within a group."""

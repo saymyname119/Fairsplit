@@ -1,4 +1,5 @@
 """shared/errors/__init__.py"""
+
 from shared.errors.app_error import (
     AppError,
     AuthenticationError,

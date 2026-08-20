@@ -1,4 +1,5 @@
 """api/routes/ledger.py — Balance and settlement endpoints."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter

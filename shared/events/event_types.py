@@ -18,6 +18,7 @@ Adding a new event
 
 No other file needs to change — that's the point of the event bus abstraction.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -25,10 +26,10 @@ from decimal import Decimal
 
 from shared.events.base import DomainEvent
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # User module events
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @dataclass(frozen=True)
 class UserRegistered(DomainEvent):
@@ -43,6 +44,7 @@ class UserRegistered(DomainEvent):
 # ─────────────────────────────────────────────────────────────────────────────
 # Group module events
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @dataclass(frozen=True)
 class GroupCreated(DomainEvent):
@@ -67,6 +69,7 @@ class MemberAdded(DomainEvent):
 # ─────────────────────────────────────────────────────────────────────────────
 # Expense module events
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @dataclass(frozen=True)
 class ExpenseCreated(DomainEvent):
@@ -106,6 +109,7 @@ class ExpenseDeleted(DomainEvent):
 # ─────────────────────────────────────────────────────────────────────────────
 # Ledger module events
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @dataclass(frozen=True)
 class SettlementRecorded(DomainEvent):

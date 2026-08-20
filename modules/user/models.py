@@ -16,6 +16,7 @@ Why separate ORM and domain models?
   This is especially important when splitting into microservices: the domain
   model becomes the DTO sent over the wire; the ORM model is private to the service.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -26,10 +27,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from shared.db.base import Base, SoftDeleteMixin, TimestampMixin, UUIDPrimaryKeyMixin
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # ORM Model — private to this module, never imported by other modules
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class UserORM(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
     """
@@ -49,6 +50,7 @@ class UserORM(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
 # ─────────────────────────────────────────────────────────────────────────────
 # Domain / DTO Models — public, returned by the service facade
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class User(BaseModel):
     """Public domain representation of a user. No passwords, no internals."""

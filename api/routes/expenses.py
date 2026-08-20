@@ -1,4 +1,5 @@
 """api/routes/expenses.py — Expense endpoints."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, status
@@ -24,9 +25,7 @@ router = APIRouter()
     },
 )
 async def create_expense(
-    group_id: str, 
-    request: CreateExpenseRequest,
-    db: AsyncSession = Depends(get_db)
+    group_id: str, request: CreateExpenseRequest, db: AsyncSession = Depends(get_db)
 ) -> Expense:
     """POST /groups/:id/expenses"""
     service = ExpenseService(db)
@@ -74,11 +73,9 @@ async def get_expense(group_id: str, expense_id: str) -> JSONResponse:
     },
 )
 async def delete_expense(
-    group_id: str, 
-    expense_id: str,
-    db: AsyncSession = Depends(get_db)
+    group_id: str, expense_id: str, db: AsyncSession = Depends(get_db)
 ) -> None:
     """DELETE /groups/:id/expenses/:id"""
-    deleter_id = "temp-deleter-id" # Will be replaced with auth token payload
+    deleter_id = "temp-deleter-id"  # Will be replaced with auth token payload
     service = ExpenseService(db)
     await service.delete_expense(expense_id, deleter_id)

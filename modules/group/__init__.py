@@ -1,4 +1,5 @@
 """modules/group/__init__.py"""
+
 from modules.group.models import (
     AddMemberRequest,
     CreateGroupRequest,
@@ -9,7 +10,11 @@ from modules.group.models import (
 from modules.group.service import GroupService, IGroupService
 
 __all__ = [
-    "Group", "GroupMember", "MemberRole",
-    "CreateGroupRequest", "AddMemberRequest",
-    "IGroupService", "GroupService",
+    "Group",
+    "GroupMember",
+    "MemberRole",
+    "CreateGroupRequest",
+    "AddMemberRequest",
+    "IGroupService",
+    "GroupService",
 ]

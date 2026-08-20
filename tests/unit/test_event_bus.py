@@ -1,4 +1,5 @@
 """tests/unit/test_event_bus.py — Unit tests for the InProcessEventBus."""
+
 from __future__ import annotations
 
 import pytest
