@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Sequence
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload

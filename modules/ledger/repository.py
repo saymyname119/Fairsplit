@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from modules.ledger.models import LedgerBalanceORM, SettlementORM
-from shared.errors import NotFoundError
 
 
 class LedgerRepository:
@@ -57,7 +56,7 @@ class LedgerRepository:
                 net_amount=amount_delta,
             )
             self._session.add(balance)
-        
+
         await self._session.flush()
         return balance
 

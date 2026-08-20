@@ -18,6 +18,7 @@ Why async?
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -56,7 +57,7 @@ AsyncSessionFactory = async_sessionmaker(
 )
 
 
-async def get_db() -> AsyncSession:  # type: ignore[return]
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     FastAPI dependency: yields an AsyncSession for one request.
 

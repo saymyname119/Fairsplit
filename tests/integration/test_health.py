@@ -3,8 +3,6 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
 
-import pytest
-
 
 class TestHealthEndpoint:
     def test_health_returns_200_when_dependencies_ok(self, client):
