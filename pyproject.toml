@@ -88,5 +88,12 @@ filterwarnings = [
     "ignore::starlette.testclient.StarletteDeprecationWarning",
 ]
 
+[tool.coverage.run]
+omit = [
+  "tests/*",
+  "*migrations*",
+  "alembic*",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["modules", "shared", "api"]
