@@ -62,7 +62,7 @@ jobs:
       # ── Run migrations against test DB, then run test suite ──────────
       - name: Run migrations
         env:
-          DATABASE_URL: postgresql+psycopg2://splitwise:splitwise@localhost:5432/splitwise_test
+          DATABASE_URL: postgresql+asyncpg://splitwise:splitwise@localhost:5432/splitwise_test
         run: alembic upgrade head
 
       - name: Run tests
