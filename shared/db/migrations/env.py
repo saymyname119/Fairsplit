@@ -16,16 +16,17 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+from modules.expense.models import ExpenseORM, SplitORM  # noqa: F401
+from modules.group.models import GroupMemberORM, GroupORM  # noqa: F401
+from modules.ledger.models import LedgerBalanceORM, SettlementORM  # noqa: F401
+
+# Import all ORM models so their tables appear in metadata
+from modules.user.models import UserORM  # noqa: F401
+
 # Must import all ORM models before accessing Base.metadata
 # so Alembic autogenerate can see all tables.
 # Order matters: import Base first, then all models.
 from shared.db.base import Base  # noqa: F401 — side effect: registers Base.metadata
-
-# Import all ORM models so their tables appear in metadata
-from modules.user.models import UserORM  # noqa: F401
-from modules.group.models import GroupORM, GroupMemberORM  # noqa: F401
-from modules.expense.models import ExpenseORM, SplitORM  # noqa: F401
-from modules.ledger.models import LedgerBalanceORM, SettlementORM  # noqa: F401
 
 config = context.config
 

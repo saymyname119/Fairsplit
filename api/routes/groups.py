@@ -59,7 +59,7 @@ async def get_group(group_id: str) -> JSONResponse:
     },
 )
 async def add_member(
-    group_id: str, 
+    group_id: str,
     request: AddMemberRequest,
     db: AsyncSession = Depends(get_db)
 ) -> Group:

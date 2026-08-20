@@ -24,7 +24,7 @@ router = APIRouter()
     },
 )
 async def create_expense(
-    group_id: str, 
+    group_id: str,
     request: CreateExpenseRequest,
     db: AsyncSession = Depends(get_db)
 ) -> Expense:
@@ -74,7 +74,7 @@ async def get_expense(group_id: str, expense_id: str) -> JSONResponse:
     },
 )
 async def delete_expense(
-    group_id: str, 
+    group_id: str,
     expense_id: str,
     db: AsyncSession = Depends(get_db)
 ) -> None:

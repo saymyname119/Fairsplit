@@ -68,7 +68,12 @@ def upgrade() -> None:
         sa.Column("id", sa.String(36), primary_key=True),
         sa.Column("name", sa.String(255), nullable=False),
         sa.Column("description", sa.String(1000), nullable=True),
-        sa.Column("created_by_id", sa.String(36), sa.ForeignKey("user_accounts.id"), nullable=False),
+        sa.Column(
+            "created_by_id",
+            sa.String(36),
+            sa.ForeignKey("user_accounts.id"),
+            nullable=False,
+        ),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),

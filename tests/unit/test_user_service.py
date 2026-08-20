@@ -1,5 +1,8 @@
-import pytest
+from datetime import datetime
 from unittest.mock import AsyncMock
+
+import pytest
+from passlib.hash import bcrypt
 
 from modules.user import (
     CreateUserRequest,
@@ -8,7 +11,7 @@ from modules.user import (
 )
 from modules.user.models import UserORM
 from shared.errors import AuthenticationError, ConflictError
-from passlib.hash import bcrypt
+
 
 @pytest.fixture
 def mock_session():
@@ -18,18 +21,17 @@ def mock_session():
 def user_service(mock_session):
     return UserService(mock_session)
 
-from datetime import datetime
 
 @pytest.mark.asyncio
 async def test_create_user_happy_path(user_service):
     request = CreateUserRequest(email="test@example.com", name="Test", password="password123")
     user_service._repo.exists_by_email = AsyncMock(return_value=False)
-    
+
     mock_orm = UserORM(
-        id="123", 
-        email="test@example.com", 
-        name="Test", 
-        hashed_password="hash", 
+        id="123",
+        email="test@example.com",
+        name="Test",
+        hashed_password="hash",
         is_active=True,
         created_at=datetime.now(),
         updated_at=datetime.now()
@@ -54,10 +56,16 @@ async def test_create_user_duplicate_email(user_service):
 async def test_authenticate_correct_password(user_service):
     request = LoginRequest(email="test@example.com", password="password123")
     hashed = bcrypt.hash("password123")
-    mock_orm = UserORM(id="123", email="test@example.com", name="Test", hashed_password=hashed, is_active=True)
-    
+    mock_orm = UserORM(
+        id="123",
+        email="test@example.com",
+        name="Test",
+        hashed_password=hashed,
+        is_active=True,
+    )
+
     user_service._repo.get_by_email = AsyncMock(return_value=mock_orm)
-    
+
     tokens = await user_service.authenticate(request)
     assert tokens.access_token
     assert tokens.refresh_token
@@ -66,10 +74,16 @@ async def test_authenticate_correct_password(user_service):
 async def test_authenticate_wrong_password(user_service):
     request = LoginRequest(email="test@example.com", password="wrongpassword")
     hashed = bcrypt.hash("password123")
-    mock_orm = UserORM(id="123", email="test@example.com", name="Test", hashed_password=hashed, is_active=True)
-    
+    mock_orm = UserORM(
+        id="123",
+        email="test@example.com",
+        name="Test",
+        hashed_password=hashed,
+        is_active=True,
+    )
+
     user_service._repo.get_by_email = AsyncMock(return_value=mock_orm)
-    
+
     with pytest.raises(AuthenticationError):
         await user_service.authenticate(request)
 
@@ -77,6 +91,6 @@ async def test_authenticate_wrong_password(user_service):
 async def test_authenticate_user_not_found(user_service):
     request = LoginRequest(email="test@example.com", password="password123")
     user_service._repo.get_by_email = AsyncMock(return_value=None)
-    
+
     with pytest.raises(AuthenticationError):
         await user_service.authenticate(request)

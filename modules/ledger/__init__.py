@@ -3,8 +3,8 @@ from modules.ledger.models import (
     Balance,
     CreateSettlementRequest,
     Settlement,
-    SimplifiedDebt,
     SimplifiedBalanceResult,
+    SimplifiedDebt,
     UserBalance,
 )
 from modules.ledger.service import ILedgerService, LedgerService

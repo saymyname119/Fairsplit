@@ -33,7 +33,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from shared.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # ORM Models (private to this module)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -168,6 +167,6 @@ class UserBalance(BaseModel):
 
 class SimplifiedBalanceResult(BaseModel):
     """Result of the greedy net-flow simplification algorithm."""
-    
+
     simplified: list[SimplifiedDebt]
     net_by_user: dict[str, Decimal]

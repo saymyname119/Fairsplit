@@ -33,7 +33,8 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from typing import Callable, TypeAlias
+from collections.abc import Callable
+from typing import TypeAlias
 
 from shared.events.base import DomainEvent
 

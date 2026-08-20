@@ -25,7 +25,6 @@ from decimal import Decimal
 
 from shared.events.base import DomainEvent
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # User module events
 # ─────────────────────────────────────────────────────────────────────────────

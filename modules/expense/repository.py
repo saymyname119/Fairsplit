@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from typing import Sequence
-from datetime import datetime, timezone
+from collections.abc import Sequence
+from datetime import UTC, datetime
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from modules.expense.models import ExpenseORM, SplitORM
 from shared.errors import NotFoundError
@@ -25,19 +24,21 @@ class ExpenseRepository:
         stmt = select(ExpenseORM).where(ExpenseORM.id == expense_id)
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
-        
-    async def get_by_id_with_splits(self, expense_id: str) -> tuple[ExpenseORM | None, Sequence[SplitORM]]:
+
+    async def get_by_id_with_splits(
+        self, expense_id: str
+    ) -> tuple[ExpenseORM | None, Sequence[SplitORM]]:
         stmt = select(ExpenseORM).where(ExpenseORM.id == expense_id)
         result = await self._session.execute(stmt)
         expense = result.scalar_one_or_none()
-        
+
         if not expense:
             return None, []
-            
+
         split_stmt = select(SplitORM).where(SplitORM.expense_id == expense_id)
         split_result = await self._session.execute(split_stmt)
         splits = split_result.scalars().all()
-        
+
         return expense, splits
 
     async def get_by_id_or_raise(self, expense_id: str) -> tuple[ExpenseORM, Sequence[SplitORM]]:
@@ -50,6 +51,6 @@ class ExpenseRepository:
         stmt = (
             update(ExpenseORM)
             .where(ExpenseORM.id == expense_id)
-            .values(deleted_at=datetime.now(timezone.utc))
+            .values(deleted_at=datetime.now(UTC))
         )
         await self._session.execute(stmt)

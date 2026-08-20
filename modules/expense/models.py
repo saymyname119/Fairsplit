@@ -27,7 +27,7 @@ handled in the split strategy layer (see Prompt 2).
 from __future__ import annotations
 
 from decimal import Decimal
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import ForeignKey, Numeric, String
@@ -35,12 +35,11 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from shared.db.base import Base, SoftDeleteMixin, TimestampMixin, UUIDPrimaryKeyMixin
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Enums
 # ─────────────────────────────────────────────────────────────────────────────
 
-class SplitType(str, Enum):
+class SplitType(StrEnum):
     """
     How an expense is divided among participants.
     Each type maps to a concrete SplitStrategy (implemented in Prompt 2).

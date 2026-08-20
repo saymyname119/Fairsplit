@@ -26,7 +26,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from shared.db.base import Base, SoftDeleteMixin, TimestampMixin, UUIDPrimaryKeyMixin
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # ORM Model — private to this module, never imported by other modules
 # ─────────────────────────────────────────────────────────────────────────────
