@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  lint-typecheck-test:
+    name: Lint → Typecheck → Test
+    runs-on: ubuntu-latest
+
+    # ── Postgres service container (integration tests need a real DB) ─────
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: splitwise
+          POSTGRES_PASSWORD: splitwise
+          POSTGRES_DB: splitwise_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies (with dev extras)
+        run: pip install -e ".[dev]"
+
+      # ── Lint (ruff checks style + import order + common bugs) ─────────
+      - name: Lint with ruff
+        run: ruff check .
+
+      # ── Type-check (mypy in strict mode) ─────────────────────────────
+      - name: Typecheck with mypy
+        run: mypy modules shared api
+        continue-on-error: false
+
+      # ── Run migrations against test DB, then run test suite ──────────
+      - name: Run migrations
+        env:
+          DATABASE_URL: postgresql+psycopg2://splitwise:splitwise@localhost:5432/splitwise_test
+        run: alembic upgrade head
+
+      - name: Run tests
+        env:
+          ENVIRONMENT: test
+          DATABASE_URL: postgresql+asyncpg://splitwise:splitwise@localhost:5432/splitwise_test
+          REDIS_URL: redis://localhost:6379/0
+          JWT_SECRET: ci-test-secret
+          CLAUDE_API_KEY: not-a-real-key
+        run: pytest --tb=short -q --cov=. --cov-report=term-missing --cov-omit="tests/*,*migrations*,alembic*"
+
+      # ── Upload coverage report as artifact ────────────────────────────
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: .coverage

@@ -1,0 +1,84 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Services
+# ─────────────────────────────────────────────────────────────────────────────
+services:
+
+  # ── Application ──────────────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      target: builder        # dev: use builder stage so we have dev deps
+    command: >
+      uvicorn api.app:app
+        --host 0.0.0.0
+        --port 8000
+        --reload              # hot-reload on file change (dev only)
+    volumes:
+      - .:/app               # mount source so --reload picks up changes
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://splitwise:splitwise@postgres:5432/splitwise"
+      REDIS_URL: "redis://redis:6379/0"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - splitwise-net
+
+  # ── Postgres 15 ──────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: splitwise
+      POSTGRES_PASSWORD: splitwise
+      POSTGRES_DB: splitwise
+    ports:
+      - "5432:5432"          # expose for local psql / DB GUI access
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U splitwise -d splitwise"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - splitwise-net
+
+  # ── Redis 7 ──────────────────────────────────────────────────────────────
+  # Not used in business logic yet (wired up in Prompt 3 for balance caching).
+  # It IS wired into the app's settings so the connection is exercised in /healthz.
+  redis:
+    image: redis:7-alpine
+    command: redis-server --save 20 1 --loglevel warning
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - splitwise-net
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Volumes  (named volumes survive `docker-compose down`, removed with --volumes)
+# ─────────────────────────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+  redis_data:
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Networks
+# ─────────────────────────────────────────────────────────────────────────────
+networks:
+  splitwise-net:
+    driver: bridge
