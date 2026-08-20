@@ -33,7 +33,7 @@ dependencies = [
     # Utilities
     "python-dotenv>=1.0.0",
     "python-jose[cryptography]>=3.3.0",  # JWT
-    "passlib[bcrypt]>=1.7.4",            # password hashing
+    "bcrypt>=4.1.2",                     # password hashing
 ]
 
 [project.optional-dependencies]

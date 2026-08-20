@@ -4,7 +4,7 @@ import abc
 from datetime import UTC, datetime, timedelta
 
 from jose import JWTError, jwt
-from passlib.hash import bcrypt
+import bcrypt
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -48,7 +48,8 @@ class UserService(IUserService):
         if await self._repo.exists_by_email(request.email):
             raise ConflictError("Email already exists")
 
-        hashed = bcrypt.hash(request.password)
+        hashed_bytes = bcrypt.hashpw(request.password.encode("utf-8"), bcrypt.gensalt())
+        hashed = hashed_bytes.decode("utf-8")
         orm_user = UserORM(
             email=request.email,
             name=request.name,
@@ -62,7 +63,9 @@ class UserService(IUserService):
 
     async def authenticate(self, request: LoginRequest) -> AuthTokens:
         user = await self._repo.get_by_email(request.email)
-        if not user or not bcrypt.verify(request.password, user.hashed_password):
+        if not user or not bcrypt.checkpw(
+            request.password.encode("utf-8"), user.hashed_password.encode("utf-8")
+        ):
             # Same error for not found and wrong password (no user enum)
             raise AuthenticationError("Invalid email or password")
 
