@@ -1,14 +1,11 @@
 from decimal import Decimal
 from unittest.mock import patch
 
-import pytest
-
 from modules.notification.service import EmailNotifier, InAppNotifier
 from shared.events import ExpenseCreated, ExpenseSplitEvent, SettlementRecorded
 
 
-@pytest.mark.asyncio
-async def test_email_notifier_expense_created():
+def test_email_notifier_expense_created() -> None:
     notifier = EmailNotifier()
 
     event = ExpenseCreated(
@@ -24,7 +21,7 @@ async def test_email_notifier_expense_created():
     )
 
     with patch("modules.notification.service.logger.info") as mock_logger:
-        await notifier.notify(event)
+        notifier.notify(event)
 
         # Should only email Bob, not Alice (the payer)
         mock_logger.assert_called_once()
@@ -33,8 +30,7 @@ async def test_email_notifier_expense_created():
         assert "15.00" in log_msg
 
 
-@pytest.mark.asyncio
-async def test_in_app_notifier_settlement_recorded():
+def test_in_app_notifier_settlement_recorded() -> None:
     notifier = InAppNotifier()
 
     event = SettlementRecorded(
@@ -46,7 +42,7 @@ async def test_in_app_notifier_settlement_recorded():
     )
 
     with patch("modules.notification.service.logger.info") as mock_logger:
-        await notifier.notify(event)
+        notifier.notify(event)
 
         mock_logger.assert_called_once()
         log_msg = mock_logger.call_args[0][0]

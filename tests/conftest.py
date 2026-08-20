@@ -23,6 +23,9 @@ os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("JWT_SECRET", "test-secret-key")
 os.environ.setdefault("CLAUDE_API_KEY", "not-a-real-key")
 
+from collections.abc import Generator
+
+from fastapi import FastAPI
 from fastapi.testclient import TestClient  # noqa: E402
 
 from api.app import create_app  # noqa: E402
@@ -30,7 +33,7 @@ from shared.events import reset_event_bus  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
-def isolate_event_bus() -> None:
+def isolate_event_bus() -> Generator[None, None, None]:
     """Reset event bus before each test to prevent handler leakage."""
     reset_event_bus()
     yield
@@ -38,13 +41,13 @@ def isolate_event_bus() -> None:
 
 
 @pytest.fixture(scope="session")
-def app():
+def app() -> FastAPI:
     """Create a single FastAPI app instance for the test session."""
     return create_app()
 
 
 @pytest.fixture(scope="session")
-def client(app):
+def client(app: FastAPI) -> Generator[TestClient, None, None]:
     """
     TestClient wraps the FastAPI app for HTTP testing.
     scope=session: one client for all tests (cheaper than creating per test).

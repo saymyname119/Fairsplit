@@ -3,6 +3,7 @@ from __future__ import annotations
 import abc
 import heapq
 from decimal import Decimal
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +18,17 @@ from modules.ledger.models import (
 from modules.ledger.repository import LedgerRepository
 from shared.errors import ConflictError
 from shared.events import ExpenseCreated, SettlementRecorded, get_event_bus
+
+
+class HeapItem:
+    def __init__(self, amount: Decimal, user_id: str) -> None:
+        self.amount = amount
+        self.user_id = user_id
+
+    def __lt__(self, other: Any) -> bool:
+        if not isinstance(other, HeapItem):
+            return NotImplemented
+        return self.amount > other.amount  # inverted for max-heap
 
 
 class ILedgerService(abc.ABC):
@@ -67,17 +79,8 @@ class LedgerService(ILedgerService):
             net_balances[b.debtor_id] -= b.net_amount
 
         # 2. Setup max heaps for creditors and debtors
-        # heapq in Python is a min-heap, so we store negative amounts
-        class HeapItem:
-            def __init__(self, amount: Decimal, user_id: str):
-                self.amount = amount
-                self.user_id = user_id
-
-            def __lt__(self, other):
-                return self.amount > other.amount  # inverted for max-heap
-
-        creditors = []
-        debtors = []
+        creditors: list[HeapItem] = []
+        debtors: list[HeapItem] = []
 
         for user_id, net in net_balances.items():
             # Filter out rounding dust (< 0.0001)
@@ -87,7 +90,7 @@ class LedgerService(ILedgerService):
                 heapq.heappush(debtors, HeapItem(abs(net), user_id))
 
         # 3. Greedy matching
-        simplified = []
+        simplified: list[SimplifiedDebt] = []
 
         while creditors and debtors:
             largest_creditor = heapq.heappop(creditors)

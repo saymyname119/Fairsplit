@@ -3,7 +3,7 @@ from __future__ import annotations
 import abc
 import logging
 
-from shared.events import DomainEvent, ExpenseCreated, MemberAdded, SettlementRecorded
+from shared.events import DomainEvent, ExpenseCreated, IEventBus, MemberAdded, SettlementRecorded
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +14,7 @@ class INotifier(abc.ABC):
     def supported_event_types(self) -> list[str]: ...
 
     @abc.abstractmethod
-    async def notify(self, event: DomainEvent) -> None: ...
+    def notify(self, event: DomainEvent) -> None: ...
 
 
 class EmailNotifier(INotifier):
@@ -22,13 +22,13 @@ class EmailNotifier(INotifier):
     def supported_event_types(self) -> list[str]:
         return ["ExpenseCreated", "SettlementRecorded"]
 
-    async def notify(self, event: DomainEvent) -> None:
+    def notify(self, event: DomainEvent) -> None:
         if isinstance(event, ExpenseCreated):
-            await self._send_expense_email(event)
+            self._send_expense_email(event)
         elif isinstance(event, SettlementRecorded):
-            await self._send_settlement_email(event)
+            self._send_settlement_email(event)
 
-    async def _send_expense_email(self, event: ExpenseCreated) -> None:
+    def _send_expense_email(self, event: ExpenseCreated) -> None:
         for split in event.splits:
             if split.user_id == event.paid_by_id:
                 continue
@@ -42,7 +42,7 @@ class EmailNotifier(INotifier):
             )
             logger.info(f"EMAIL TO {split.user_id}:\n{email_body}")
 
-    async def _send_settlement_email(self, event: SettlementRecorded) -> None:
+    def _send_settlement_email(self, event: SettlementRecorded) -> None:
         email_body = (
             f"Hi {event.to_user_id},\n\n"
             f"You received a payment of ${event.amount:.2f} from {event.from_user_id} "
@@ -57,7 +57,7 @@ class InAppNotifier(INotifier):
     def supported_event_types(self) -> list[str]:
         return ["ExpenseCreated", "SettlementRecorded", "MemberAdded"]
 
-    async def notify(self, event: DomainEvent) -> None:
+    def notify(self, event: DomainEvent) -> None:
         # For Prompt 2, we just log. In Prompt 3, we'd insert into a notifications table.
         if isinstance(event, ExpenseCreated):
             for split in event.splits:
@@ -78,7 +78,7 @@ class InAppNotifier(INotifier):
             logger.info(msg)
 
 
-def register_notification_handlers(bus) -> None:
+def register_notification_handlers(bus: IEventBus) -> None:
     email_notifier = EmailNotifier()
     for event_type in email_notifier.supported_event_types:
         bus.subscribe(f"expense.{event_type}", email_notifier.notify)

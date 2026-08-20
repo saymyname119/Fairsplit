@@ -58,7 +58,7 @@ class GroupService(IGroupService):
             GroupCreated(
                 group_id=domain_group.id,
                 name=domain_group.name,
-                created_by_id=creator_id,
+                creator_id=creator_id,
             )
         )
         return domain_group
