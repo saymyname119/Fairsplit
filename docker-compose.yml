@@ -10,13 +10,8 @@ services:
     build:
       context: .
       target: builder        # dev: use builder stage so we have dev deps
-    command: >
-      uvicorn api.app:app
-        --host 0.0.0.0
-        --port 8000
-        --reload              # hot-reload on file change (dev only)
-    volumes:
-      - .:/app               # mount source so --reload picks up changes
+    command: uvicorn api.app:app --host 0.0.0.0 --port 8000 --reload     # hot-reload on file change (dev only)
+                 # mount source so --reload picks up changes
     ports:
       - "8000:8000"
     env_file:
@@ -24,11 +19,14 @@ services:
     environment:
       DATABASE_URL: "postgresql+asyncpg://splitwise:splitwise@postgres:5432/splitwise"
       REDIS_URL: "redis://redis:6379/0"
+      PYTHONPATH: "/app"      # so we can import from the root of the repo
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      - ./:/app
     networks:
       - splitwise-net
 
@@ -43,6 +41,7 @@ services:
       - "5432:5432"          # expose for local psql / DB GUI access
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U splitwise -d splitwise"]
       interval: 5s

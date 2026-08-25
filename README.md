@@ -59,10 +59,13 @@ graph TB
 ## Quick Start
 
 ### Prerequisites
-- Docker & Docker Compose
+- Docker & Docker Compose (V2)
 - Python 3.11+ (for local dev without Docker)
+- **Important:** Ensure ports `8000` (API), `5432` (Postgres), and `6379` (Redis) are free on your host machine before starting.
 
 ### With Docker (Recommended)
+
+This is the fastest way to get the entire modular monolith and its infrastructure running.
 
 ```bash
 # 1. Clone and enter the project
@@ -73,40 +76,46 @@ cp .env.example .env
 # Edit .env — at minimum set CLAUDE_API_KEY for Prompt 4 features
 
 # 3. Start all services
-docker-compose up --build
+# Note: The first build may take 2-3 minutes to compile gcc and libpq-dev. 
+# Subsequent builds will use the Docker cache and start instantly.
+docker compose up --build
 
 # 4. Run database migrations
-docker-compose exec app alembic upgrade head
+# In a separate terminal tab, apply the Alembic migrations to the running Postgres container
+docker compose exec app alembic upgrade head
 
 # 5. Verify everything is running
 curl http://localhost:8000/healthz
 # → {"status": "ok", "services": {"database": "ok", "redis": "ok"}}
 
 # 6. Open API docs
+# Navigate your browser to the interactive Swagger UI
 open http://localhost:8000/docs
 ```
 
-### Local Development (Without Docker)
+### Local Development (Hybrid Approach)
+
+If you prefer to run the FastAPI server directly on your host machine while keeping the database and cache in Docker:
 
 ```bash
-# Create and activate a virtual environment
+# 1. Create and activate a virtual environment
 python -m venv .venv
 source .venv/bin/activate        # Linux/Mac
 .venv\Scripts\activate           # Windows
 
-# Install all dependencies (including dev)
+# 2. Install all dependencies (including dev)
 pip install -e ".[dev]"
 
-# Start Postgres and Redis (still need Docker for infra)
-docker-compose up postgres redis -d
-
-# Copy and configure .env
+# 3. Copy and configure .env
 cp .env.example .env
 
-# Run migrations
+# 4. Start Postgres and Redis infrastructure
+docker compose up postgres redis -d
+
+# 5. Run database migrations against the local Postgres container
 alembic upgrade head
 
-# Start the dev server with hot-reload
+# 6. Start the dev server with hot-reload
 uvicorn api.app:app --reload --port 8000
 ```
 
