@@ -10,7 +10,6 @@ from jose import jwt
 from api.auth_dependency import get_current_user
 from shared.errors import AuthenticationError
 
-
 SECRET = "test-secret-key"
 ALGORITHM = "HS256"
 

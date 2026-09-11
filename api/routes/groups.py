@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,7 +29,7 @@ router = APIRouter()
 async def create_group(
     request: CreateGroupRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
 ) -> Group:
     """POST /groups — creates a group with the authenticated user as admin."""
     service = GroupService(db)
@@ -46,7 +48,7 @@ async def create_group(
 async def get_group(
     group_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
 ) -> Group:
     """GET /groups/:id — returns group details with all members."""
     service = GroupService(db)
@@ -68,7 +70,7 @@ async def add_member(
     group_id: str,
     request: AddMemberRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
 ) -> Group:
     """POST /groups/:id/members"""
     service = GroupService(db)
@@ -89,7 +91,7 @@ async def remove_member(
     group_id: str,
     user_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
 ) -> None:
     """DELETE /groups/:id/members/:userId — admin-only, checks outstanding balances."""
     service = GroupService(db)

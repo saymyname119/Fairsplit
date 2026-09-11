@@ -76,6 +76,8 @@ async def get_cached(key: str) -> str | None:
             logger.debug("Cache HIT: %s", key)
         else:
             logger.debug("Cache MISS: %s", key)
+        if isinstance(value, bytes):
+            return value.decode("utf-8")
         return value
     except Exception:
         # Fail-open: if Redis is down, the app still works (just slower)

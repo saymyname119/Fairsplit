@@ -22,6 +22,8 @@ Design notes:
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
@@ -33,7 +35,7 @@ from shared.errors import AuthenticationError
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
+async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict[str, Any]:
     """
     Decode and validate the JWT bearer token.
 

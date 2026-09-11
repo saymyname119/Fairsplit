@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,7 +30,7 @@ async def create_expense(
     group_id: str,
     request: CreateExpenseRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
 ) -> Expense:
     """POST /groups/:id/expenses"""
     service = ExpenseService(db)
@@ -49,7 +51,7 @@ async def list_expenses(
     limit: int = 50,
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
 ) -> list[Expense]:
     """GET /groups/:id/expenses — paginated, newest first."""
     service = ExpenseService(db)
@@ -69,7 +71,7 @@ async def get_expense(
     group_id: str,
     expense_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
 ) -> Expense:
     """GET /groups/:id/expenses/:expense_id"""
     service = ExpenseService(db)
@@ -90,7 +92,7 @@ async def delete_expense(
     group_id: str,
     expense_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
 ) -> None:
     """DELETE /groups/:id/expenses/:id"""
     service = ExpenseService(db)

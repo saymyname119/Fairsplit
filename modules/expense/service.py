@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import abc
+from collections.abc import Sequence
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -163,7 +164,7 @@ class ExpenseService(IExpenseService):
 
     @staticmethod
     def _map_to_domain(
-        expense_orm: ExpenseORM, split_orms: list[SplitORM] | tuple[SplitORM, ...]
+        expense_orm: ExpenseORM, split_orms: Sequence[SplitORM]
     ) -> Expense:
         from modules.expense.models import SplitType
 

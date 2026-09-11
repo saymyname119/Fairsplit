@@ -23,13 +23,12 @@ from modules.ledger.models import LedgerBalanceORM, SettlementORM  # noqa: F401
 
 # Import all ORM models so their tables appear in metadata
 from modules.user.models import UserORM  # noqa: F401
+from shared.config import get_settings
 
 # Must import all ORM models before accessing Base.metadata
 # so Alembic autogenerate can see all tables.
 # Order matters: import Base first, then all models.
 from shared.db.base import Base  # noqa: F401 — side effect: registers Base.metadata
-
-from shared.config import get_settings
 
 config = context.config
 

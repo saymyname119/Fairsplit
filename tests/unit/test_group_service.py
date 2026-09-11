@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from modules.group import CreateGroupRequest, GroupService, MemberRole
+from modules.group import GroupService, MemberRole
 from modules.group.models import GroupMemberORM, GroupORM
 from shared.errors import ConflictError, ForbiddenError, NotFoundError
 

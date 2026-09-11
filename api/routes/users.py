@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -46,7 +48,7 @@ async def create_user(request: CreateUserRequest, db: AsyncSession = Depends(get
 async def get_user(
     user_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
 ) -> User:
     """GET /users/:id — return user profile."""
     service = UserService(db)
@@ -65,7 +67,7 @@ async def get_user(
 async def get_user_balances(
     user_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
 ) -> UserBalance:
     """
     GET /users/:id/balances

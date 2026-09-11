@@ -64,7 +64,11 @@ class TestPublicEndpoints:
     def test_healthz_is_public(self, client):
         from unittest.mock import AsyncMock, patch
         with (
-            patch("api.routes.health.check_db_connection", new_callable=AsyncMock, return_value=True),
+            patch(
+                "api.routes.health.check_db_connection",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
             patch("redis.asyncio.Redis.ping", new_callable=AsyncMock, return_value=True),
         ):
             response = client.get("/healthz")

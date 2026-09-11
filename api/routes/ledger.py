@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,7 +34,7 @@ router = APIRouter()
 async def get_group_balances(
     group_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
 ) -> list[Balance]:
     """
     GET /groups/:id/balances
@@ -43,22 +44,20 @@ async def get_group_balances(
       1. Check Redis key: balances:group:{group_id}
       2. Cache hit → deserialize and return
       3. Cache miss → call LedgerService.get_group_balances(), cache result, return
-
-    Invalidated by: ExpenseCreated and SettlementRecorded event handlers.
     """
     cache_key = balance_cache_key(group_id)
 
     # 1. Try cache
-    cached = await get_cached(cache_key)
-    if cached is not None:
-        data = json.loads(cached)
-        return [Balance(**item) for item in data]
+    cached_data = await get_cached(cache_key)
+    if cached_data is not None:
+        raw_list = json.loads(cached_data)
+        return [Balance.model_validate(b) for b in raw_list]
 
-    # 2. Cache miss — fetch from DB
+    # 2. Cache miss — compute from DB
     service = LedgerService(db)
     balances = await service.get_group_balances(group_id)
 
-    # 3. Cache the result
+    # 3. Write to cache (TTL handles safety net)
     await set_cached(cache_key, [b.model_dump() for b in balances])
 
     return balances
@@ -69,19 +68,18 @@ async def get_group_balances(
     summary="Get simplified settlement plan",
     response_model=SimplifiedBalanceResult,
     responses={
-        200: {"description": "Minimum transactions to settle the group"},
+        200: {"description": "Minimum transaction settlement plan"},
         404: {"description": "Group not found"},
     },
 )
 async def get_simplified_balances(
     group_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
 ) -> SimplifiedBalanceResult:
     """
     GET /groups/:id/balances/simplified
-    Returns minimum set of payments to settle all debts in the group.
-    Uses the Greedy Net-Flow algorithm (O(N log N)).
+    Returns the minimum transaction settlement plan (greedy net-flow algorithm).
     """
     service = LedgerService(db)
     return await service.get_simplified_balances(group_id)
@@ -93,23 +91,21 @@ async def get_simplified_balances(
     status_code=201,
     response_model=Settlement,
     responses={
-        201: {"description": "Settlement recorded, balances updated"},
-        400: {"description": "Invalid settlement data"},
+        201: {"description": "Settlement recorded"},
+        400: {"description": "Invalid amount or self-settlement"},
         404: {"description": "Group or user not found"},
-        409: {"description": "Settlement amount exceeds outstanding balance"},
     },
 )
 async def record_settlement(
     group_id: str,
     request: CreateSettlementRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
 ) -> Settlement:
     """
     POST /groups/:id/settle
 
     Records that from_user paid to_user amount.
-    Uses SELECT FOR UPDATE to prevent concurrent settlement race conditions.
     """
     service = LedgerService(db)
     return await service.record_settlement(group_id, request)
