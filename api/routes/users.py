@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
-from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.auth_dependency import get_current_user
+from modules.ledger import LedgerService, UserBalance
 from modules.user import CreateUserRequest, User, UserService
 from shared.db.session import get_db
 
@@ -27,6 +28,7 @@ async def create_user(request: CreateUserRequest, db: AsyncSession = Depends(get
     """
     POST /users
     Register a new user account.
+    Note: Registration does NOT require authentication (public endpoint).
     """
     service = UserService(db)
     return await service.create_user(request)
@@ -41,7 +43,11 @@ async def create_user(request: CreateUserRequest, db: AsyncSession = Depends(get
         404: {"description": "User not found"},
     },
 )
-async def get_user(user_id: str, db: AsyncSession = Depends(get_db)) -> User:
+async def get_user(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+) -> User:
     """GET /users/:id — return user profile."""
     service = UserService(db)
     return await service.get_user(user_id)
@@ -50,18 +56,20 @@ async def get_user(user_id: str, db: AsyncSession = Depends(get_db)) -> User:
 @router.get(
     "/{user_id}/balances",
     summary="Get a user's balances across all groups",
+    response_model=UserBalance,
     responses={
         200: {"description": "Aggregated balance across all groups"},
         404: {"description": "User not found"},
     },
 )
-async def get_user_balances(user_id: str) -> JSONResponse:
+async def get_user_balances(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+) -> UserBalance:
     """
     GET /users/:id/balances
     Returns aggregated balance across all groups the user belongs to.
-    Full implementation in Prompt 3 (LedgerService.get_user_balances + caching).
     """
-    return JSONResponse(
-        status_code=501,
-        content={"message": "Not implemented yet — coming in Prompt 3"},
-    )
+    service = LedgerService(db)
+    return await service.get_user_balances(user_id)

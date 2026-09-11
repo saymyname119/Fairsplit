@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, status
-from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.auth_dependency import get_current_user
 from modules.expense import CreateExpenseRequest, Expense, ExpenseService
 from shared.db.session import get_db
 
@@ -25,7 +25,10 @@ router = APIRouter()
     },
 )
 async def create_expense(
-    group_id: str, request: CreateExpenseRequest, db: AsyncSession = Depends(get_db)
+    group_id: str,
+    request: CreateExpenseRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ) -> Expense:
     """POST /groups/:id/expenses"""
     service = ExpenseService(db)
@@ -35,6 +38,7 @@ async def create_expense(
 @router.get(
     "/{group_id}/expenses",
     summary="List expenses for a group",
+    response_model=list[Expense],
     responses={
         200: {"description": "Paginated list of expenses"},
         404: {"description": "Group not found"},
@@ -44,22 +48,32 @@ async def list_expenses(
     group_id: str,
     limit: int = 50,
     offset: int = 0,
-) -> JSONResponse:
-    """GET /groups/:id/expenses — full implementation in Prompt 3."""
-    return JSONResponse(status_code=501, content={"message": "Coming in Prompt 3"})
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+) -> list[Expense]:
+    """GET /groups/:id/expenses — paginated, newest first."""
+    service = ExpenseService(db)
+    return await service.list_expenses(group_id, limit, offset)
 
 
 @router.get(
     "/{group_id}/expenses/{expense_id}",
     summary="Get a single expense",
+    response_model=Expense,
     responses={
         200: {"description": "Expense with splits"},
         404: {"description": "Expense not found"},
     },
 )
-async def get_expense(group_id: str, expense_id: str) -> JSONResponse:
-    """GET /groups/:id/expenses/:expense_id — full implementation in Prompt 3."""
-    return JSONResponse(status_code=501, content={"message": "Coming in Prompt 3"})
+async def get_expense(
+    group_id: str,
+    expense_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+) -> Expense:
+    """GET /groups/:id/expenses/:expense_id"""
+    service = ExpenseService(db)
+    return await service.get_expense(expense_id)
 
 
 @router.delete(
@@ -73,9 +87,11 @@ async def get_expense(group_id: str, expense_id: str) -> JSONResponse:
     },
 )
 async def delete_expense(
-    group_id: str, expense_id: str, db: AsyncSession = Depends(get_db)
+    group_id: str,
+    expense_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ) -> None:
     """DELETE /groups/:id/expenses/:id"""
-    deleter_id = "temp-deleter-id"  # Will be replaced with auth token payload
     service = ExpenseService(db)
-    await service.delete_expense(expense_id, deleter_id)
+    await service.delete_expense(expense_id, current_user["user_id"])

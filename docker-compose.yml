@@ -1,5 +1,3 @@
-version: "3.9"
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Services
 # ─────────────────────────────────────────────────────────────────────────────
@@ -9,12 +7,8 @@ services:
   app:
     build:
       context: .
-      target: builder        # dev: use builder stage so we have dev deps
-    command: >
-      uvicorn api.app:app
-        --host 0.0.0.0
-        --port 8000
-        --reload              # hot-reload on file change (dev only)
+      target: builder
+    command: ["uvicorn", "api.app:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     volumes:
       - .:/app               # mount source so --reload picks up changes
     ports:

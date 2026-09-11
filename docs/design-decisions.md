@@ -164,12 +164,46 @@ Adding a new notification channel (e.g., SMS) requires zero changes to the `Expe
 
 ## 7. Caching Strategy: Write-Invalidate for Balances
 
-*(To be written in Prompt 3 after implementation)*
+**Decision**: Use write-invalidate (delete key on write) instead of write-through
+(update key on write) for the group balance cache in Redis.
 
-Section headers:
-- Why cache invalidation (delete key) over write-through (update key)
-- Why money data makes write-through especially risky (staleness = wrong balance)
-- TTL as a safety net, not the primary freshness mechanism
+**The three caching strategies considered:**
+
+| Strategy | How it works | Risk |
+|---|---|---|
+| Write-through | On every expense/settlement, recalculate and write the new cache value | If the DB write succeeds but cache write fails → stale cache shows wrong balance |
+| Write-behind | Buffer writes in cache, flush to DB later | Data loss on crash — unacceptable for money |
+| **Write-invalidate** | On every expense/settlement, DELETE the cache key | Next read recalculates from DB — always fresh |
+
+**Why write-invalidate for money data?**
+
+1. **Correctness over performance.** A stale balance cache means showing a user the
+   wrong amount of money. Write-invalidate guarantees the next read is always fresh
+   from the database — there is no window where the cache disagrees with the DB.
+
+2. **Simplicity.** Cache invalidation is one `DEL balances:group:{group_id}` command.
+   Write-through requires serializing the new balance, atomically updating Redis, and
+   handling partial failure (what if the DB commits but Redis is temporarily unavailable?).
+
+3. **Failure mode.** If the invalidation event is lost (process crash, event bus failure),
+   the TTL safety net (default: 300 seconds) guarantees the stale entry self-expires.
+   The maximum staleness window is bounded and configurable.
+
+**Implementation details:**
+
+- **Cache key**: `balances:group:{group_id}`
+- **TTL**: 300 seconds (configurable via `BALANCE_CACHE_TTL_SECONDS`)
+- **Invalidation trigger**: Event bus handlers subscribed to `ExpenseCreated` and
+  `SettlementRecorded` events call `invalidate(balance_cache_key(group_id))`
+- **Fail-open**: If Redis is unavailable, `get_cached()` returns `None` and the app
+  falls through to the database. The app never fails because Redis is down.
+
+**TTL as a safety net, not the primary freshness mechanism:**
+
+The TTL exists only to handle edge cases where an invalidation event is lost. Under
+normal operation, the cache is invalidated immediately on every write. The TTL prevents
+unbounded staleness — it does NOT mean we tolerate 5 minutes of stale data as normal
+operation.
 
 ---
 

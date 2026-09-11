@@ -3,8 +3,8 @@ from __future__ import annotations
 import abc
 from datetime import UTC, datetime, timedelta
 
-from jose import JWTError, jwt
 import bcrypt
+from jose import JWTError, jwt
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 

@@ -26,14 +26,39 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.routes import ai, auth, expenses, groups, health, ledger, users
 from modules.notification import register_notification_handlers
+from shared.cache import balance_cache_key, close_redis, invalidate
 from shared.config import get_settings
 from shared.db.session import check_db_connection
 from shared.errors import AppError
-from shared.events import get_event_bus
+from shared.events import DomainEvent, get_event_bus
 from shared.middleware.error_handler import app_error_handler, unhandled_exception_handler
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+
+def _handle_cache_invalidation(event: DomainEvent) -> None:
+    """
+    Event handler: invalidate the group balance cache when balances change.
+    Subscribed to ExpenseCreated and SettlementRecorded events.
+
+    Why synchronous wrapper around async invalidate()?
+      The InProcessEventBus fires handlers synchronously (by design — see
+      shared/events/event_bus.py). Cache invalidation is a DEL command that
+      takes < 1ms, so the impact on response time is negligible. When we move
+      to Kafka, this handler becomes a consumer that can run async natively.
+    """
+    import asyncio
+
+    group_id = getattr(event, "group_id", None)
+    if group_id:
+        key = balance_cache_key(group_id)
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(invalidate(key))
+        except RuntimeError:
+            # No running event loop (e.g., in tests) — skip cache invalidation
+            logger.debug("No event loop for cache invalidation — skipping")
 
 
 @asynccontextmanager
@@ -53,6 +78,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     bus = get_event_bus()
     register_notification_handlers(bus)
 
+    # Wire cache invalidation to the event bus
+    bus.subscribe("expense.ExpenseCreated", _handle_cache_invalidation)
+    bus.subscribe("ledger.SettlementRecorded", _handle_cache_invalidation)
+    logger.info("Cache invalidation handlers registered for balance cache")
+
     # Verify infrastructure connectivity
     db_ok = await check_db_connection()
     if not db_ok:
@@ -66,6 +96,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # ── Shutdown ──────────────────────────────────────────────────────────
     logger.info("Application shutting down")
+    await close_redis()
+    logger.info("Redis connection closed")
 
 
 def create_app() -> FastAPI:
@@ -81,7 +113,7 @@ def create_app() -> FastAPI:
             "A Splitwise-style expense splitting app. "
             "Modular monolith, microservice-ready. Built as a portfolio project."
         ),
-        version="0.1.0",
+        version="0.2.0",
         lifespan=lifespan,
         docs_url="/docs",
         redoc_url="/redoc",

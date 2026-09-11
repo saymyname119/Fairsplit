@@ -149,14 +149,22 @@ All endpoints documented at `http://localhost:8000/docs` (Swagger UI).
 | Method | Path | Description | Status |
 |---|---|---|---|
 | GET | `/healthz` | Infrastructure health check | ✅ Done |
-| POST | `/users/` | Register user | 🔲 Prompt 2 |
-| GET | `/users/:id/balances` | User's total balances | 🔲 Prompt 3 |
-| POST | `/groups/` | Create group | 🔲 Prompt 2 |
-| POST | `/groups/:id/members` | Add member | 🔲 Prompt 2 |
-| POST | `/groups/:id/expenses` | Create expense | 🔲 Prompt 2 |
-| GET | `/groups/:id/balances` | Group balances (cached) | 🔲 Prompt 3 |
-| GET | `/groups/:id/balances/simplified` | Minimum settlement plan | 🔲 Prompt 2 |
-| POST | `/groups/:id/settle` | Record settlement | 🔲 Prompt 2 |
+| POST | `/users/` | Register user | ✅ Done |
+| GET | `/users/:id` | Get user profile | ✅ Done |
+| GET | `/users/:id/balances` | User's total balances | ✅ Done |
+| POST | `/auth/login` | Authenticate | ✅ Done |
+| POST | `/auth/refresh` | Refresh access token | ✅ Done |
+| POST | `/groups/` | Create group | ✅ Done |
+| GET | `/groups/:id` | Get group details | ✅ Done |
+| POST | `/groups/:id/members` | Add member | ✅ Done |
+| DELETE | `/groups/:id/members/:userId` | Remove member | ✅ Done |
+| POST | `/groups/:id/expenses` | Create expense | ✅ Done |
+| GET | `/groups/:id/expenses` | List expenses (paginated) | ✅ Done |
+| GET | `/groups/:id/expenses/:id` | Get single expense | ✅ Done |
+| DELETE | `/groups/:id/expenses/:id` | Soft-delete expense | ✅ Done |
+| GET | `/groups/:id/balances` | Group balances (cached) | ✅ Done |
+| GET | `/groups/:id/balances/simplified` | Minimum settlement plan | ✅ Done |
+| POST | `/groups/:id/settle` | Record settlement | ✅ Done |
 | POST | `/groups/:id/expenses/parse` | NLP expense parsing | 🔲 Prompt 4 |
 
 ---
@@ -182,17 +190,45 @@ Full detail in [`docs/design-decisions.md`](docs/design-decisions.md).
 
 This project is built across 5 prompts (Antigravity-powered development):
 
-- [x] **Prompt 1** — Scaffolding & Architecture *(this state)*
-- [ ] **Prompt 2** — LLD: Domain classes, split strategies, ledger, tests
-- [ ] **Prompt 3** — HLD: Full API, DB migrations, Redis caching
-- [ ] **Prompt 4** — AI: Claude NLP parsing
-- [ ] **Prompt 5** — Polish, diagrams, interview prep
+- [x] **Prompt 1** — Scaffolding & Architecture
+- [x] **Prompt 2** — LLD: Domain classes, split strategies, ledger, tests
+- [x] **Prompt 3** — HLD: Full API, DB migrations, Redis caching, JWT auth
+- [x] **Prompt 5** — Polish: scaling docs, interview prep, architecture diagrams
+- [x] **Frontend** — Warm editorial web app built with React, Vite & Claude design system ([`design.md`](design.md))
+- [ ] **Prompt 4** *(optional)* — AI: Claude NLP parsing
 
 ---
 
 ## Documentation
 
-- [`docs/architecture.md`](docs/architecture.md) — Module map, sequence diagrams, DB schema
+- [`docs/architecture.md`](docs/architecture.md) — Module map, sequence diagrams, ER diagram, cache flow
 - [`docs/design-decisions.md`](docs/design-decisions.md) — Every significant technical choice and why
-- [`docs/scaling.md`](docs/scaling.md) — How this handles 10M users *(Prompt 5)*
-- [`docs/interview-prep.md`](docs/interview-prep.md) — 5 hard questions + answers *(Prompt 5)*
+- [`docs/scaling.md`](docs/scaling.md) — How this handles 10M users (phases 1–3)
+- [`docs/interview-prep.md`](docs/interview-prep.md) — 5 hard questions + answers
+
+---
+
+## Getting Started
+
+```bash
+# 1. Clone and install
+git clone <repo-url>
+cd splitwise
+python -m venv .venv
+.venv/Scripts/activate      # or source .venv/bin/activate on Linux/Mac
+pip install -e ".[dev]"
+
+# 2. Start infrastructure
+docker-compose up -d postgres redis
+
+# 3. Run migrations
+alembic upgrade head
+
+# 4. Start the app
+uvicorn api.app:app --reload
+
+# 5. Run tests
+pytest tests/ -v
+```
+
+API docs: [http://localhost:8000/docs](http://localhost:8000/docs)

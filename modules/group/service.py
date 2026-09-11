@@ -15,6 +15,7 @@ from modules.group.models import (
     MemberRole,
 )
 from modules.group.repository import GroupRepository
+from modules.ledger.repository import LedgerRepository
 from shared.errors import ConflictError, ForbiddenError
 from shared.events import GroupCreated, MemberAdded, get_event_bus
 
@@ -24,14 +25,23 @@ class IGroupService(abc.ABC):
     async def create_group(self, creator_id: str, request: CreateGroupRequest) -> Group: ...
 
     @abc.abstractmethod
+    async def get_group(self, group_id: str) -> Group: ...
+
+    @abc.abstractmethod
     async def add_member(
         self, group_id: str, adder_id: str, request: AddMemberRequest
     ) -> Group: ...
+
+    @abc.abstractmethod
+    async def remove_member(
+        self, group_id: str, remover_id: str, user_id: str
+    ) -> None: ...
 
 
 class GroupService(IGroupService):
     def __init__(self, session: AsyncSession) -> None:
         self._repo = GroupRepository(session)
+        self._ledger_repo = LedgerRepository(session)
         self._bus = get_event_bus()
 
     async def create_group(self, creator_id: str, request: CreateGroupRequest) -> Group:
@@ -62,6 +72,10 @@ class GroupService(IGroupService):
             )
         )
         return domain_group
+
+    async def get_group(self, group_id: str) -> Group:
+        orm_group = await self._repo.get_by_id_or_raise(group_id)
+        return self._map_to_domain(orm_group)
 
     async def add_member(self, group_id: str, adder_id: str, request: AddMemberRequest) -> Group:
         await self._repo.get_by_id_or_raise(group_id)
@@ -94,6 +108,35 @@ class GroupService(IGroupService):
             )
         )
         return domain_group
+
+    async def remove_member(
+        self, group_id: str, remover_id: str, user_id: str
+    ) -> None:
+        await self._repo.get_by_id_or_raise(group_id)
+
+        # Only admins can remove members
+        remover = await self._repo.get_member(group_id, remover_id)
+        if not remover or remover.role != MemberRole.ADMIN:
+            raise ForbiddenError("Only admins can remove members")
+
+        # Cannot remove yourself if you're the only admin
+        if remover_id == user_id:
+            raise ConflictError("Cannot remove yourself — transfer admin role first")
+
+        # Check that the user is actually a member
+        target = await self._repo.get_member(group_id, user_id)
+        if not target:
+            from shared.errors import NotFoundError
+            raise NotFoundError("Member", user_id)
+
+        # Check for outstanding balances
+        has_balance = await self._ledger_repo.has_outstanding_balance(group_id, user_id)
+        if has_balance:
+            raise ConflictError(
+                "Cannot remove member with outstanding balances — settle first"
+            )
+
+        await self._repo.remove_member(group_id, user_id)
 
     def _map_to_domain(self, orm_group: GroupORM) -> Group:
         members = []

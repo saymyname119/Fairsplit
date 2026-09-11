@@ -166,3 +166,162 @@ Short version:
 3. **Kafka** replaces the in-process event bus — one consumer group per subscriber module
 4. **Sharding by group_id** — all expense and ledger data for a group lives on one shard
 5. **Module extraction** — ledger-service first (independent scaling of reads vs writes)
+
+---
+
+## Module Dependency Graph
+
+```mermaid
+graph TD
+    API["API Layer (Routes)"]
+    User["User Module"]
+    Group["Group Module"]
+    Expense["Expense Module"]
+    Ledger["Ledger Module"]
+    Notif["Notification Module"]
+    AI["AI Module"]
+    Bus["Event Bus"]
+    Cache["Redis Cache"]
+    DB["PostgreSQL"]
+
+    API --> User
+    API --> Group
+    API --> Expense
+    API --> Ledger
+    API --> AI
+    API --> Cache
+
+    Expense -->|"publishes ExpenseCreated"| Bus
+    Group -->|"publishes MemberAdded"| Bus
+    Bus -->|"subscribes"| Ledger
+    Bus -->|"subscribes"| Notif
+    Bus -->|"invalidates cache"| Cache
+
+    User --> DB
+    Group --> DB
+    Expense --> DB
+    Ledger --> DB
+
+    AI -->|"Claude API"| External["External API"]
+
+    style Bus fill:#f9f,stroke:#333
+    style Cache fill:#ff9,stroke:#333
+    style DB fill:#9cf,stroke:#333
+```
+
+---
+
+## Database ER Diagram
+
+```mermaid
+erDiagram
+    user_accounts {
+        string id PK
+        string email UK
+        string name
+        string hashed_password
+        boolean is_active
+        datetime created_at
+        datetime deleted_at
+    }
+
+    group_groups {
+        string id PK
+        string name
+        string description
+        string created_by_id FK
+        datetime created_at
+        datetime deleted_at
+    }
+
+    group_members {
+        string id PK
+        string group_id FK
+        string user_id FK
+        string role
+        datetime created_at
+    }
+
+    expense_expenses {
+        string id PK
+        string group_id FK
+        string paid_by_id FK
+        decimal amount
+        string description
+        string split_type
+        datetime created_at
+        datetime deleted_at
+    }
+
+    expense_splits {
+        string id PK
+        string expense_id FK
+        string user_id FK
+        string group_id FK
+        decimal owed_amount
+        decimal percentage
+    }
+
+    ledger_balances {
+        string id PK
+        string group_id FK
+        string creditor_id FK
+        string debtor_id FK
+        decimal net_amount
+    }
+
+    ledger_settlements {
+        string id PK
+        string group_id FK
+        string from_user_id FK
+        string to_user_id FK
+        decimal amount
+        datetime created_at
+    }
+
+    user_accounts ||--o{ group_groups : "creates"
+    user_accounts ||--o{ group_members : "joins"
+    group_groups ||--o{ group_members : "has"
+    group_groups ||--o{ expense_expenses : "contains"
+    user_accounts ||--o{ expense_expenses : "pays"
+    expense_expenses ||--o{ expense_splits : "split into"
+    group_groups ||--o{ ledger_balances : "tracks"
+    group_groups ||--o{ ledger_settlements : "settles in"
+```
+
+---
+
+## Cache Invalidation Flow
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant API as API Layer
+    participant Redis as Redis Cache
+    participant LS as LedgerService
+    participant DB as PostgreSQL
+
+    Note over C, DB: Read Path (Cache Hit)
+    C->>API: GET /groups/:id/balances
+    API->>Redis: GET balances:group:{id}
+    Redis-->>API: cached data ✓
+    API-->>C: 200 OK (from cache)
+
+    Note over C, DB: Read Path (Cache Miss)
+    C->>API: GET /groups/:id/balances
+    API->>Redis: GET balances:group:{id}
+    Redis-->>API: null (miss)
+    API->>LS: get_group_balances(id)
+    LS->>DB: SELECT from ledger_balances
+    DB-->>LS: balance rows
+    LS-->>API: list[Balance]
+    API->>Redis: SET balances:group:{id} (TTL=300s)
+    API-->>C: 200 OK (from DB)
+
+    Note over C, DB: Write Path (Invalidation)
+    C->>API: POST /groups/:id/expenses
+    API->>DB: INSERT expense + splits
+    API->>Redis: DEL balances:group:{id}
+    Note right of Redis: Next read will<br/>recalculate from DB
+```
+

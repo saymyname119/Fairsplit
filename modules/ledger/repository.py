@@ -69,3 +69,27 @@ class LedgerRepository:
         self._session.add(settlement)
         await self._session.flush()
         return settlement
+
+    async def get_user_balances(self, user_id: str) -> Sequence[LedgerBalanceORM]:
+        """Get all balance rows where the user is either creditor or debtor."""
+        stmt = select(LedgerBalanceORM).where(
+            (LedgerBalanceORM.creditor_id == user_id)
+            | (LedgerBalanceORM.debtor_id == user_id)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalars().all()
+
+    async def has_outstanding_balance(self, group_id: str, user_id: str) -> bool:
+        """Check if a user has any non-zero balances in a group."""
+        stmt = (
+            select(LedgerBalanceORM.id)
+            .where(
+                LedgerBalanceORM.group_id == group_id,
+                (LedgerBalanceORM.creditor_id == user_id)
+                | (LedgerBalanceORM.debtor_id == user_id),
+                LedgerBalanceORM.net_amount != 0,
+            )
+            .limit(1)
+        )
+        result = await self._session.execute(stmt)
+        return result.first() is not None

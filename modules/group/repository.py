@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -56,3 +56,11 @@ class GroupRepository:
         )
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def remove_member(self, group_id: str, user_id: str) -> None:
+        stmt = delete(GroupMemberORM).where(
+            GroupMemberORM.group_id == group_id,
+            GroupMemberORM.user_id == user_id,
+        )
+        await self._session.execute(stmt)
+        await self._session.flush()

@@ -14,6 +14,7 @@ from modules.ledger.models import (
     SettlementORM,
     SimplifiedBalanceResult,
     SimplifiedDebt,
+    UserBalance,
 )
 from modules.ledger.repository import LedgerRepository
 from shared.errors import ConflictError
@@ -45,6 +46,9 @@ class ILedgerService(abc.ABC):
 
     @abc.abstractmethod
     async def handle_expense_created(self, event: ExpenseCreated) -> None: ...
+
+    @abc.abstractmethod
+    async def get_user_balances(self, user_id: str) -> UserBalance: ...
 
 
 class LedgerService(ILedgerService):
@@ -187,3 +191,43 @@ class LedgerService(ILedgerService):
             amount_delta = owed * sign
 
             await self._repo.upsert_balance(event.group_id, creditor, debtor, amount_delta)
+
+    async def get_user_balances(self, user_id: str) -> UserBalance:
+        """Aggregate a user's balances across all groups."""
+        balance_rows = await self._repo.get_user_balances(user_id)
+
+        total_owed = Decimal("0")
+        total_owed_to = Decimal("0")
+        by_group: dict[str, Decimal] = {}
+
+        for b in balance_rows:
+            if b.net_amount == 0:
+                continue
+
+            if b.creditor_id == user_id:
+                # This user is the creditor — they are owed money
+                if b.net_amount > 0:
+                    total_owed_to += b.net_amount
+                    by_group[b.group_id] = by_group.get(b.group_id, Decimal("0")) + b.net_amount
+                else:
+                    # Negative net_amount means the canonical creditor actually owes
+                    total_owed += abs(b.net_amount)
+                    by_group[b.group_id] = by_group.get(b.group_id, Decimal("0")) + b.net_amount
+            elif b.debtor_id == user_id:
+                # This user is the debtor
+                if b.net_amount > 0:
+                    total_owed += b.net_amount
+                    by_group[b.group_id] = by_group.get(b.group_id, Decimal("0")) - b.net_amount
+                else:
+                    total_owed_to += abs(b.net_amount)
+                    by_group[b.group_id] = by_group.get(b.group_id, Decimal("0")) - b.net_amount
+
+        net = total_owed_to - total_owed
+
+        return UserBalance(
+            user_id=user_id,
+            total_owed=total_owed,
+            total_owed_to=total_owed_to,
+            net=net,
+            by_group=by_group,
+        )

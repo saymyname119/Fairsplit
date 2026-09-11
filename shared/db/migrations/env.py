@@ -29,11 +29,12 @@ from modules.user.models import UserORM  # noqa: F401
 # Order matters: import Base first, then all models.
 from shared.db.base import Base  # noqa: F401 — side effect: registers Base.metadata
 
+from shared.config import get_settings
+
 config = context.config
 
-# Override sqlalchemy.url with DATABASE_URL env var if set
-# Replace asyncpg driver with psycopg2 for synchronous Alembic migrations
-database_url = os.getenv("DATABASE_URL", config.get_main_option("sqlalchemy.url"))
+settings = get_settings()
+database_url = os.getenv("DATABASE_URL", settings.database_url)
 if database_url and "asyncpg" in database_url:
     database_url = database_url.replace("postgresql+asyncpg", "postgresql+psycopg2")
 if database_url:

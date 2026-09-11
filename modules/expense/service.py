@@ -4,7 +4,13 @@ import abc
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from modules.expense.models import CreateExpenseRequest, Expense, ExpenseORM, SplitORM
+from modules.expense.models import (
+    CreateExpenseRequest,
+    Expense,
+    ExpenseORM,
+    Split,
+    SplitORM,
+)
 from modules.expense.repository import ExpenseRepository
 from modules.expense.strategies import SplitStrategyFactory
 from modules.group.repository import GroupRepository
@@ -15,6 +21,14 @@ from shared.events import ExpenseCreated, ExpenseSplitEvent, get_event_bus
 class IExpenseService(abc.ABC):
     @abc.abstractmethod
     async def create_expense(self, group_id: str, request: CreateExpenseRequest) -> Expense: ...
+
+    @abc.abstractmethod
+    async def get_expense(self, expense_id: str) -> Expense: ...
+
+    @abc.abstractmethod
+    async def list_expenses(
+        self, group_id: str, limit: int = 50, offset: int = 0
+    ) -> list[Expense]: ...
 
     @abc.abstractmethod
     async def delete_expense(self, expense_id: str, deleted_by_id: str) -> None: ...
@@ -126,3 +140,41 @@ class ExpenseService(IExpenseService):
 
         # In a real app we'd verify it has no settled splits
         await self._repo.soft_delete(expense_id)
+
+    async def get_expense(self, expense_id: str) -> Expense:
+        expense_orm, split_orms = await self._repo.get_by_id_or_raise(expense_id)
+        if expense_orm.deleted_at:
+            raise NotFoundError("Expense", expense_id)
+        return self._map_to_domain(expense_orm, split_orms)
+
+    async def list_expenses(
+        self, group_id: str, limit: int = 50, offset: int = 0
+    ) -> list[Expense]:
+        # Verify group exists
+        group = await self._group_repo.get_by_id(group_id)
+        if not group:
+            raise NotFoundError("Group", group_id)
+
+        expenses_with_splits = await self._repo.list_by_group(group_id, limit, offset)
+        return [
+            self._map_to_domain(expense, splits)
+            for expense, splits in expenses_with_splits
+        ]
+
+    @staticmethod
+    def _map_to_domain(
+        expense_orm: ExpenseORM, split_orms: list[SplitORM] | tuple[SplitORM, ...]
+    ) -> Expense:
+        from modules.expense.models import SplitType
+
+        splits = [Split.model_validate(s) for s in split_orms]
+        return Expense(
+            id=expense_orm.id,
+            group_id=expense_orm.group_id,
+            paid_by_id=expense_orm.paid_by_id,
+            amount=expense_orm.amount,
+            description=expense_orm.description,
+            split_type=SplitType(expense_orm.split_type),
+            notes=expense_orm.notes,
+            splits=splits,
+        )

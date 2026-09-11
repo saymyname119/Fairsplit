@@ -54,3 +54,37 @@ class ExpenseRepository:
             .values(deleted_at=datetime.now(UTC))
         )
         await self._session.execute(stmt)
+
+    async def list_by_group(
+        self, group_id: str, limit: int = 50, offset: int = 0
+    ) -> list[tuple[ExpenseORM, list[SplitORM]]]:
+        """
+        Return paginated expenses for a group, ordered by newest first.
+        Each item is a tuple of (expense, splits).
+        """
+        # Fetch expenses (excluding soft-deleted)
+        expense_stmt = (
+            select(ExpenseORM)
+            .where(ExpenseORM.group_id == group_id, ExpenseORM.deleted_at.is_(None))
+            .order_by(ExpenseORM.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await self._session.execute(expense_stmt)
+        expenses = result.scalars().all()
+
+        if not expenses:
+            return []
+
+        # Batch-load splits for all returned expenses
+        expense_ids = [e.id for e in expenses]
+        split_stmt = select(SplitORM).where(SplitORM.expense_id.in_(expense_ids))
+        split_result = await self._session.execute(split_stmt)
+        all_splits = split_result.scalars().all()
+
+        # Group splits by expense_id
+        splits_by_expense: dict[str, list[SplitORM]] = {}
+        for s in all_splits:
+            splits_by_expense.setdefault(s.expense_id, []).append(s)
+
+        return [(e, splits_by_expense.get(e.id, [])) for e in expenses]
