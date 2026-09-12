@@ -296,15 +296,23 @@ export class ApiClient {
 
   async checkLiveBackend(): Promise<boolean> {
     try {
-      const res = await fetch(`${API_BASE}/healthz`, { method: 'GET' });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      const res = await fetch(`${API_BASE}/healthz`, {
+        method: 'GET',
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
       const data = await res.json().catch(() => null);
+      // Accept 200 (ok or degraded) — DB is alive, Redis is optional
       if (res.ok || data?.services?.database === 'ok') {
         this.isDemoMode = false;
-        demoStore.logEvent('GET', '/healthz', 200, 'Live FastAPI connected to Supabase PostgreSQL', false, 5);
+        const dbStatus = data?.status || 'ok';
+        demoStore.logEvent('GET', '/healthz', 200, `Live FastAPI (${dbStatus}) — Supabase PostgreSQL`, false, 5);
         return true;
       }
     } catch {
-      // Backend not running; stay in demo mode
+      // Backend not running or timed out; stay in demo mode
     }
     this.isDemoMode = true;
     return false;

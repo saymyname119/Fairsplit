@@ -140,7 +140,19 @@ export const TopNav: React.FC<TopNavProps> = ({
             className="btn btn-text-link"
             style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}
           >
-            <UserCheck size={15} style={{ color: 'var(--color-primary)' }} />
+            {currentUser?.avatar_url ? (
+              <img
+                src={currentUser.avatar_url}
+                alt={currentUser.name}
+                style={{
+                  width: '24px', height: '24px', borderRadius: '50%',
+                  objectFit: 'cover', border: '1.5px solid var(--color-primary)',
+                }}
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <UserCheck size={15} style={{ color: 'var(--color-primary)' }} />
+            )}
             <span>{currentUser ? currentUser.name.split(' ')[0] : 'Sign In'}</span>
           </button>
         </div>

@@ -10,6 +10,7 @@ import {
   type SplitStrategy,
   type SplitItem,
 } from './api/client';
+import { supabase, onAuthStateChange, signOutSupabase, type Session } from './utils/supabase';
 import { TopNav } from './components/TopNav';
 import { HeroBand } from './components/HeroBand';
 import { GroupSelector } from './components/GroupSelector';
@@ -36,6 +37,9 @@ export const App: React.FC = () => {
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
+  // Supabase session state — tracks Google OAuth + any Supabase auth
+  const [supabaseSession, setSupabaseSession] = useState<Session | null>(null);
+
   // Load initial groups
   useEffect(() => {
     const init = async () => {
@@ -48,6 +52,44 @@ export const App: React.FC = () => {
       }
     };
     init();
+  }, []);
+
+  // ── Supabase Auth State Listener ──────────────────────────────────────
+  // Listens for Google OAuth redirects, session refresh, and sign-outs.
+  useEffect(() => {
+    // Check for existing session on mount
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSupabaseSession(session);
+      if (session?.user) {
+        const meta = session.user.user_metadata;
+        setCurrentUser({
+          id: session.user.id,
+          name: meta?.full_name || meta?.name || session.user.email?.split('@')[0] || 'User',
+          email: session.user.email || '',
+          avatar_url: meta?.avatar_url || meta?.picture,
+        });
+        api.isDemoMode = false;
+        setIsDemoMode(false);
+      }
+    });
+
+    // Subscribe to future auth changes (OAuth callback, sign-out, etc.)
+    const unsubscribe = onAuthStateChange((session, user) => {
+      setSupabaseSession(session);
+      if (session && user) {
+        const meta = user.user_metadata;
+        setCurrentUser({
+          id: user.id,
+          name: meta?.full_name || meta?.name || user.email?.split('@')[0] || 'User',
+          email: user.email || '',
+          avatar_url: meta?.avatar_url || meta?.picture,
+        });
+        api.isDemoMode = false;
+        setIsDemoMode(false);
+      }
+    });
+
+    return unsubscribe;
   }, []);
 
   // When selected group changes, load its data
@@ -255,8 +297,17 @@ export const App: React.FC = () => {
       <AuthModal
         isOpen={isAuthModalOpen}
         currentUser={currentUser}
+        supabaseSession={supabaseSession}
         onClose={() => setIsAuthModalOpen(false)}
         onSelectUser={(u) => setCurrentUser(u)}
+        onSupabaseLogout={async () => {
+          await signOutSupabase();
+          setSupabaseSession(null);
+          api.isDemoMode = true;
+          setIsDemoMode(true);
+          setCurrentUser(SEED_USERS[0]);
+          setIsAuthModalOpen(false);
+        }}
       />
     </div>
   );
