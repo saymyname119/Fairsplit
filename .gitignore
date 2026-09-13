@@ -55,3 +55,16 @@ logs/
 # Alembic — don't commit __pycache__ inside migrations
 shared/db/migrations/__pycache__/
 shared/db/migrations/versions/__pycache__/
+
+# Node & Frontend Dependencies
+node_modules/
+frontend/node_modules/
+.npm/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+frontend/dist/
+.turbo/
+.parcel-cache/
+

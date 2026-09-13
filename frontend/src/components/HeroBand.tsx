@@ -60,12 +60,12 @@ export const HeroBand: React.FC<HeroBandProps> = ({
               Greedy net-flow debt simplification guarantees minimum settlements.
             </p>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-              <button onClick={onOpenExpenseModal} className="btn btn-primary">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <button onClick={onOpenExpenseModal} className="btn btn-primary" style={{ height: '42px', padding: '0 26px', fontSize: '15px', fontWeight: 500 }}>
                 <PlusCircle size={16} />
-                <span>Record New Expense</span>
+                <span>Record Expense</span>
               </button>
-              <button onClick={onOpenGroupModal} className="btn btn-secondary">
+              <button onClick={onOpenGroupModal} className="btn btn-secondary" style={{ height: '42px', padding: '0 22px', fontSize: '15px' }}>
                 <Users size={16} />
                 <span>Create Group</span>
               </button>

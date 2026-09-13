@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -79,6 +80,41 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             raise
         finally:
             await session.close()
+
+
+import inspect
+
+
+@asynccontextmanager
+async def isolated_transaction(
+    session: AsyncSession,
+    isolation_level: str = "REPEATABLE READ",
+) -> AsyncGenerator[AsyncSession, None]:
+    """
+    Context manager to execute database operations under a specific isolation level
+    (e.g., 'SERIALIZABLE', 'REPEATABLE READ').
+
+    Used during balance recalculations or debt simplifications to prevent phantom
+    reads, stale balance caching, or inconsistent intermediate financial state.
+    """
+    try:
+        conn = await session.connection()
+        await conn.execution_options(isolation_level=isolation_level)
+    except Exception as e:
+        logger.debug("Could not set connection execution options for isolation_level %s: %s", isolation_level, e)
+
+    in_tx = session.in_transaction() if callable(getattr(session, "in_transaction", None)) else False
+    if inspect.iscoroutine(in_tx):
+        in_tx = await in_tx
+
+    if not in_tx:
+        async with session.begin():
+            yield session
+    else:
+        async with session.begin_nested():
+            yield session
+
+
 
 
 async def check_db_connection() -> bool:

@@ -11,6 +11,7 @@ from modules.expense.models import (
     ExpenseORM,
     Split,
     SplitORM,
+    UpdateExpenseRequest,
 )
 from modules.expense.repository import ExpenseRepository
 from modules.expense.strategies import SplitStrategyFactory
@@ -33,6 +34,12 @@ class IExpenseService(abc.ABC):
 
     @abc.abstractmethod
     async def delete_expense(self, expense_id: str, deleted_by_id: str) -> None: ...
+
+    @abc.abstractmethod
+    async def update_expense(
+        self, expense_id: str, request: UpdateExpenseRequest, updated_by_id: str
+    ) -> Expense: ...
+
 
 
 class ExpenseService(IExpenseService):
@@ -141,6 +148,34 @@ class ExpenseService(IExpenseService):
 
         # In a real app we'd verify it has no settled splits
         await self._repo.soft_delete(expense_id)
+
+    async def update_expense(
+        self, expense_id: str, request: UpdateExpenseRequest, updated_by_id: str
+    ) -> Expense:
+        expense_orm, split_orms = await self._repo.get_by_id_or_raise(expense_id)
+        if expense_orm.deleted_at:
+            raise NotFoundError("Expense", expense_id)
+
+        # Verify permissions: payer or group admin
+        if updated_by_id != expense_orm.paid_by_id:
+            updater = await self._group_repo.get_member(expense_orm.group_id, updated_by_id)
+            if not updater or updater.role != "admin":
+                raise ForbiddenError("Only the payer or a group admin can edit an expense")
+
+        if request.description is not None:
+            expense_orm.description = request.description
+        if request.amount is not None:
+            expense_orm.amount = request.amount
+        if request.paid_by_id is not None:
+            is_member = await self._group_repo.is_member(expense_orm.group_id, request.paid_by_id)
+            if not is_member:
+                raise NotFoundError("User not in group", request.paid_by_id)
+            expense_orm.paid_by_id = request.paid_by_id
+        if request.notes is not None:
+            expense_orm.notes = request.notes
+
+        await self._session.flush()
+        return self._map_to_domain(expense_orm, split_orms)
 
     async def get_expense(self, expense_id: str) -> Expense:
         expense_orm, split_orms = await self._repo.get_by_id_or_raise(expense_id)

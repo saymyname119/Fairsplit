@@ -22,12 +22,14 @@ export const TopNav: React.FC<TopNavProps> = ({
   return (
     <header
       style={{
-        backgroundColor: 'var(--color-canvas)',
-        borderBottom: '1px solid var(--color-hairline)',
+        backgroundColor: 'rgba(250, 249, 245, 0.88)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        borderBottom: '1px solid rgba(230, 223, 216, 0.6)',
         position: 'sticky',
         top: 0,
         zIndex: 100,
-        height: '64px',
+        height: '58px',
         display: 'flex',
         alignItems: 'center',
       }}
@@ -94,64 +96,115 @@ export const TopNav: React.FC<TopNavProps> = ({
           </div>
         </div>
 
-        {/* Center / Right controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {/* Mode Badge / Switcher */}
+        {/* Right: controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* Mode badge */}
           <button
             onClick={onToggleDemo}
             title="Toggle between Live FastAPI backend & Mock Demo store"
-            className="badge badge-cream"
             style={{
-              cursor: 'pointer',
-              border: '1px solid var(--color-hairline)',
-              background: isDemoMode ? 'var(--color-surface-soft)' : '#e8f5e9',
-              color: isDemoMode ? 'var(--color-body)' : '#2e7d32',
-              display: 'flex',
+              display: 'inline-flex',
               alignItems: 'center',
-              gap: '6px',
-              padding: '6px 12px',
+              gap: '5px',
+              padding: '5px 12px',
+              borderRadius: 'var(--radius-pill)',
+              border: '1px solid var(--color-hairline)',
+              background: isDemoMode ? 'var(--color-surface-card)' : 'rgba(46, 125, 50, 0.08)',
+              color: isDemoMode ? 'var(--color-body)' : '#2e7d32',
+              fontSize: '12px',
+              fontFamily: 'var(--font-sans)',
+              fontWeight: 500,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
             }}
           >
             {isDemoMode ? (
               <>
-                <Database size={13} style={{ color: 'var(--color-primary)' }} />
-                <span>Demo Sandbox</span>
+                <Database size={12} style={{ color: 'var(--color-primary)' }} />
+                <span>Demo</span>
               </>
             ) : (
               <>
-                <ShieldCheck size={13} style={{ color: '#2e7d32' }} />
-                <span>FastAPI Live</span>
+                <ShieldCheck size={12} style={{ color: '#2e7d32' }} />
+                <span>Live</span>
               </>
             )}
-            <RefreshCw size={11} style={{ opacity: 0.6, marginLeft: '2px' }} />
+            <RefreshCw size={10} style={{ opacity: 0.5 }} />
           </button>
 
-          {/* Action Buttons */}
-          <button onClick={onOpenNewGroup} className="btn btn-secondary" style={{ height: '36px', padding: '0 14px' }}>
+          {/* Divider */}
+          <div style={{ width: '1px', height: '20px', backgroundColor: 'var(--color-hairline)', margin: '0 4px' }} />
+
+          {/* New Group — text/ghost style */}
+          <button
+            onClick={onOpenNewGroup}
+            className="btn-text-link"
+            style={{
+              fontSize: '14px',
+              fontWeight: 500,
+              color: 'var(--color-body-strong)',
+              padding: '6px 12px',
+            }}
+          >
             + Group
           </button>
-          <button onClick={onOpenNewExpense} className="btn btn-primary" style={{ height: '36px', padding: '0 16px' }}>
+
+          {/* Add Expense — pill CTA */}
+          <button
+            onClick={onOpenNewExpense}
+            className="btn btn-primary"
+            style={{ height: '34px', padding: '0 18px', fontSize: '13.5px' }}
+          >
             + Add Expense
           </button>
 
-          {/* User Profile / Auth */}
+          {/* User avatar pill */}
           <button
             onClick={onOpenAuth}
-            className="btn btn-text-link"
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '7px',
+              padding: '4px 10px 4px 4px',
+              borderRadius: 'var(--radius-pill)',
+              border: '1px solid var(--color-hairline)',
+              background: 'var(--color-surface-card)',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontFamily: 'var(--font-sans)',
+              fontWeight: 500,
+              color: 'var(--color-ink)',
+              transition: 'all 0.15s ease',
+              boxShadow: '0 1px 2px rgba(20,20,19,0.04)',
+              marginLeft: '4px',
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--color-surface-cream-strong)';
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--color-surface-card)';
+            }}
           >
             {currentUser?.avatar_url ? (
               <img
                 src={currentUser.avatar_url}
                 alt={currentUser.name}
                 style={{
-                  width: '24px', height: '24px', borderRadius: '50%',
+                  width: '26px', height: '26px', borderRadius: '50%',
                   objectFit: 'cover', border: '1.5px solid var(--color-primary)',
                 }}
                 referrerPolicy="no-referrer"
               />
             ) : (
-              <UserCheck size={15} style={{ color: 'var(--color-primary)' }} />
+              <div style={{
+                width: '26px', height: '26px', borderRadius: '50%',
+                backgroundColor: 'var(--color-primary)',
+                color: '#fff', display: 'flex', alignItems: 'center',
+                justifyContent: 'center', fontSize: '11px', fontWeight: 700,
+                flexShrink: 0,
+              }}>
+                {currentUser ? currentUser.name.charAt(0).toUpperCase() : <UserCheck size={13} />}
+              </div>
             )}
             <span>{currentUser ? currentUser.name.split(' ')[0] : 'Sign In'}</span>
           </button>

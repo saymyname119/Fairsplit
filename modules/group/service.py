@@ -37,6 +37,10 @@ class IGroupService(abc.ABC):
         self, group_id: str, remover_id: str, user_id: str
     ) -> None: ...
 
+    @abc.abstractmethod
+    async def list_user_groups(self, user_id: str) -> list[Group]: ...
+
+
 
 class GroupService(IGroupService):
     def __init__(self, session: AsyncSession) -> None:
@@ -76,6 +80,11 @@ class GroupService(IGroupService):
     async def get_group(self, group_id: str) -> Group:
         orm_group = await self._repo.get_by_id_or_raise(group_id)
         return self._map_to_domain(orm_group)
+
+    async def list_user_groups(self, user_id: str) -> list[Group]:
+        orm_groups = await self._repo.list_by_user(user_id)
+        return [self._map_to_domain(g) for g in orm_groups]
+
 
     async def add_member(self, group_id: str, adder_id: str, request: AddMemberRequest) -> Group:
         await self._repo.get_by_id_or_raise(group_id)

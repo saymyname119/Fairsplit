@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from modules.ledger.models import (
     Balance,
     CreateSettlementRequest,
+    LedgerBalanceORM,
     Settlement,
     SettlementORM,
     SimplifiedBalanceResult,
@@ -17,6 +18,7 @@ from modules.ledger.models import (
     UserBalance,
 )
 from modules.ledger.repository import LedgerRepository
+from shared.cache import balance_cache_key, invalidate
 from shared.errors import ConflictError
 from shared.events import ExpenseCreated, SettlementRecorded, get_event_bus
 
@@ -37,7 +39,12 @@ class ILedgerService(abc.ABC):
     async def get_group_balances(self, group_id: str) -> list[Balance]: ...
 
     @abc.abstractmethod
-    async def get_simplified_balances(self, group_id: str) -> SimplifiedBalanceResult: ...
+    async def get_simplified_balances(
+        self, group_id: str, for_update: bool = False
+    ) -> SimplifiedBalanceResult: ...
+
+    @abc.abstractmethod
+    async def recalculate_group_balances(self, group_id: str) -> list[Balance]: ...
 
     @abc.abstractmethod
     async def record_settlement(
@@ -66,8 +73,14 @@ class LedgerService(ILedgerService):
         orms = await self._repo.get_group_balances(group_id)
         return [Balance.model_validate(o) for o in orms]
 
-    async def get_simplified_balances(self, group_id: str) -> SimplifiedBalanceResult:
-        balances = await self.get_group_balances(group_id)
+    async def get_simplified_balances(
+        self, group_id: str, for_update: bool = False
+    ) -> SimplifiedBalanceResult:
+        if for_update:
+            orms = await self._repo.get_group_balances_for_update(group_id)
+            balances = [Balance.model_validate(o) for o in orms]
+        else:
+            balances = await self.get_group_balances(group_id)
 
         # 1. Compute net balances per user
         net_balances: dict[str, Decimal] = {}
@@ -178,19 +191,82 @@ class LedgerService(ILedgerService):
     async def handle_expense_created(self, event: ExpenseCreated) -> None:
         payer = event.paid_by_id
 
+        # 1. Group split amounts by canonical pair (creditor, debtor)
+        pair_deltas: dict[tuple[str, str], Decimal] = {}
         for split in event.splits:
             if split.user_id == payer:
                 continue
 
             owed = split.owed_amount
             creditor, debtor, sign = self._canonical_pair(payer, split.user_id)
-
-            # The payer is owed `owed`.
-            # If payer is the canonical creditor, we add `owed`.
-            # If payer is the canonical debtor, we subtract `owed`.
             amount_delta = owed * sign
+            pair_deltas[(creditor, debtor)] = (
+                pair_deltas.get((creditor, debtor), Decimal("0")) + amount_delta
+            )
 
-            await self._repo.upsert_balance(event.group_id, creditor, debtor, amount_delta)
+        # 2. Acquire row locks and update balances in deterministic sorted order
+        # to strictly prevent lock-order deadlocks between concurrent expenses.
+        for creditor, debtor in sorted(pair_deltas.keys()):
+            delta = pair_deltas[(creditor, debtor)]
+            await self._repo.upsert_balance(event.group_id, creditor, debtor, delta)
+
+        # 3. Synchronously invalidate cached balances
+        cache_key = balance_cache_key(event.group_id)
+        await invalidate(cache_key)
+
+    async def recalculate_group_balances(self, group_id: str) -> list[Balance]:
+        """
+        Recalculates all net balances for a group from active expenses and settlements.
+        Uses SELECT FOR UPDATE row-level locking on all group balance rows to eliminate
+        concurrency race conditions and stale caches.
+        """
+        # 1. Pessimistic row-level lock on existing balance rows
+        existing_orms = await self._repo.get_group_balances_for_update(group_id)
+        existing_map = {(o.creditor_id, o.debtor_id): o for o in existing_orms}
+
+        # 2. Fetch ground truth data for the group
+        active_splits = await self._repo.get_active_group_splits(group_id)
+        settlements = await self._repo.get_group_settlements(group_id)
+
+        # 3. Compute net balance for every pair in canonical order
+        pair_nets: dict[tuple[str, str], Decimal] = {}
+
+        for payer_id, user_id, owed_amount in active_splits:
+            if payer_id == user_id or owed_amount <= Decimal("0"):
+                continue
+            creditor, debtor, sign = self._canonical_pair(payer_id, user_id)
+            pair_nets[(creditor, debtor)] = (
+                pair_nets.get((creditor, debtor), Decimal("0")) + (owed_amount * sign)
+            )
+
+        for s in settlements:
+            if s.from_user_id == s.to_user_id or s.amount <= Decimal("0"):
+                continue
+            creditor, debtor, sign = self._canonical_pair(s.to_user_id, s.from_user_id)
+            pair_nets[(creditor, debtor)] = (
+                pair_nets.get((creditor, debtor), Decimal("0")) - (s.amount * sign)
+            )
+
+        # 4. Synchronize ORM rows under lock in deterministic sorted order
+        all_pairs = sorted(set(list(existing_map.keys()) + list(pair_nets.keys())))
+        result_orms: list[LedgerBalanceORM] = []
+
+        for c, d in all_pairs:
+            net = pair_nets.get((c, d), Decimal("0"))
+            if (c, d) in existing_map:
+                orm = existing_map[(c, d)]
+                orm.net_amount = net
+                result_orms.append(orm)
+            elif net != Decimal("0"):
+                orm = await self._repo.upsert_balance(group_id, c, d, net)
+                result_orms.append(orm)
+
+        # 5. Invalidate Redis cache
+        cache_key = balance_cache_key(group_id)
+        await invalidate(cache_key)
+
+        return [Balance.model_validate(o) for o in result_orms]
+
 
     async def get_user_balances(self, user_id: str) -> UserBalance:
         """Aggregate a user's balances across all groups."""

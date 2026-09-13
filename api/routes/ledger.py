@@ -74,15 +74,41 @@ async def get_group_balances(
 )
 async def get_simplified_balances(
     group_id: str,
+    for_update: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: dict[str, Any] = Depends(get_current_user),
 ) -> SimplifiedBalanceResult:
     """
     GET /groups/:id/balances/simplified
     Returns the minimum transaction settlement plan (greedy net-flow algorithm).
+    If for_update=True, acquires row-level locks on balance rows to prevent concurrent mutations.
     """
     service = LedgerService(db)
-    return await service.get_simplified_balances(group_id)
+    return await service.get_simplified_balances(group_id, for_update=for_update)
+
+
+@router.post(
+    "/{group_id}/balances/recalculate",
+    summary="Recalculate group balances with row-level locks",
+    response_model=list[Balance],
+    responses={
+        200: {"description": "Recalculated balances for group"},
+        404: {"description": "Group not found"},
+    },
+)
+async def recalculate_group_balances(
+    group_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict[str, Any] = Depends(get_current_user),
+) -> list[Balance]:
+    """
+    POST /groups/:id/balances/recalculate
+    Recalculates ground-truth net balances from active expenses and settlements.
+    Uses SELECT FOR UPDATE row-level locks and atomically invalidates Redis balance cache.
+    """
+    service = LedgerService(db)
+    return await service.recalculate_group_balances(group_id)
+
 
 
 @router.post(

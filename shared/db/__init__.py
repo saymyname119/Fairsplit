@@ -15,17 +15,26 @@ __all__ = [
     "AsyncSessionFactory",
     "get_db",
     "check_db_connection",
+    "isolated_transaction",
 ]
 
 
 def __getattr__(name: str) -> Any:
-    if name in {"engine", "AsyncSessionFactory", "get_db", "check_db_connection"}:
-        from shared.db.session import AsyncSessionFactory, check_db_connection, engine, get_db
+    if name in {"engine", "AsyncSessionFactory", "get_db", "check_db_connection", "isolated_transaction"}:
+        from shared.db.session import (
+            AsyncSessionFactory,
+            check_db_connection,
+            engine,
+            get_db,
+            isolated_transaction,
+        )
 
         return {
             "engine": engine,
             "AsyncSessionFactory": AsyncSessionFactory,
             "get_db": get_db,
             "check_db_connection": check_db_connection,
+            "isolated_transaction": isolated_transaction,
         }[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+

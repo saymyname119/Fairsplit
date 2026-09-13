@@ -22,8 +22,6 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
   onClose,
   onSubmit,
 }) => {
-  if (!isOpen) return null;
-
   const [description, setDescription] = useState('');
   const [amountStr, setAmountStr] = useState('');
   const [paidById, setPaidById] = useState(group.members[0]?.user_id || '');
@@ -45,9 +43,24 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Reset form fields when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setDescription('');
+      setAmountStr('');
+      setPaidById(group.members[0]?.user_id || '');
+      setSplitStrategy('EQUAL');
+      setSelectedUserIds(group.members.map((m) => m.user_id));
+      setExactAmounts({});
+      setPercentages({});
+      setShares({});
+      setErrorMsg(null);
+    }
+  }, [isOpen, group]);
+
   const amount = parseFloat(amountStr) || 0;
 
-  // Sync default values when amount changes or modal opens
+  // Sync default values when splitStrategy changes
   useEffect(() => {
     if (splitStrategy === 'PERCENTAGE') {
       const count = group.members.length;
@@ -65,6 +78,7 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
       setShares(initial);
     }
   }, [splitStrategy, group.members]);
+
 
   const toggleUserEqual = (userId: string) => {
     if (selectedUserIds.includes(userId)) {
@@ -176,6 +190,8 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
 
     onClose();
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="modal-overlay" onClick={onClose}>

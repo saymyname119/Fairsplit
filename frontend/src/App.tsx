@@ -18,7 +18,9 @@ import { BalanceView } from './components/BalanceView';
 import { ExpensesList } from './components/ExpensesList';
 import { ActivityMockup } from './components/ActivityMockup';
 import { ExpenseModal } from './components/ExpenseModal';
+import { ExpenseDetailModal } from './components/ExpenseDetailModal';
 import { NewGroupModal } from './components/NewGroupModal';
+import { AddMemberModal } from './components/AddMemberModal';
 import { AuthModal } from './components/AuthModal';
 import { Footer } from './components/Footer';
 
@@ -36,6 +38,9 @@ export const App: React.FC = () => {
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
+  const [addMemberGroupId, setAddMemberGroupId] = useState<string>('');
+  const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
 
   // Supabase session state — tracks Google OAuth + any Supabase auth
   const [supabaseSession, setSupabaseSession] = useState<Session | null>(null);
@@ -68,6 +73,9 @@ export const App: React.FC = () => {
           email: session.user.email || '',
           avatar_url: meta?.avatar_url || meta?.picture,
         });
+        if (session.access_token) {
+          api.setToken(session.access_token);
+        }
         api.isDemoMode = false;
         setIsDemoMode(false);
       }
@@ -84,8 +92,14 @@ export const App: React.FC = () => {
           email: user.email || '',
           avatar_url: meta?.avatar_url || meta?.picture,
         });
+        if (session.access_token) {
+          api.setToken(session.access_token);
+        }
         api.isDemoMode = false;
         setIsDemoMode(false);
+      } else if (!session) {
+        api.clearToken();
+        setCurrentUser(SEED_USERS[0]);
       }
     });
 
@@ -157,6 +171,54 @@ export const App: React.FC = () => {
     await refreshBalances();
   };
 
+  // Delete Expense Handler
+  const handleDeleteExpense = async (expenseId: string) => {
+    if (!selectedGroupId) return;
+    await api.deleteExpense(expenseId, selectedGroupId);
+    setExpenses(expenses.filter((e) => e.id !== expenseId));
+    await refreshBalances();
+  };
+
+  // Update Expense Handler
+  const handleUpdateExpense = async (expenseId: string, updates: Parameters<typeof api.updateExpense>[2]) => {
+    if (!selectedGroupId) return;
+    const updated = await api.updateExpense(expenseId, selectedGroupId, updates);
+    setExpenses(expenses.map((e) => e.id === expenseId ? updated : e));
+    setSelectedExpense(updated);
+    await refreshBalances();
+  };
+
+  // Add Member Handler
+  const handleOpenAddMember = (groupId: string) => {
+    setAddMemberGroupId(groupId);
+    setIsAddMemberModalOpen(true);
+  };
+
+  const handleAddMember = async (name: string, email: string) => {
+    if (!addMemberGroupId) return;
+    const updated = await api.addMember(addMemberGroupId, name, email);
+    if (updated) {
+      setGroups(groups.map((g) => (g.id === updated.id ? updated : g)));
+    }
+  };
+
+  // Remove Member Handler
+  const handleRemoveMember = async (groupId: string, userId: string, userName: string) => {
+    const confirmed = window.confirm(`Remove ${userName} from this group?`);
+    if (!confirmed) return;
+    const success = await api.removeMember(groupId, userId);
+    if (success) {
+      setGroups(groups.map((g) => {
+        if (g.id !== groupId) return g;
+        return { ...g, members: g.members.filter((m) => m.user_id !== userId) };
+      }));
+      // Refresh balances since member composition changed
+      if (groupId === selectedGroupId) {
+        await refreshBalances();
+      }
+    }
+  };
+
   // Toggle demo mode
   const handleToggleDemo = async () => {
     if (api.isDemoMode) {
@@ -201,33 +263,35 @@ export const App: React.FC = () => {
           selectedGroupId={selectedGroupId}
           onSelectGroup={(id) => setSelectedGroupId(id)}
           onOpenNewGroup={() => setIsGroupModalOpen(true)}
+          onAddMember={handleOpenAddMember}
+          onRemoveMember={handleRemoveMember}
         />
 
-        {/* Section Navigation Tabs */}
-        <div className="tabs-container" style={{ marginBottom: '28px' }}>
+        {/* Section Navigation — Apple Segmented Control */}
+        <div className="segmented-control" style={{ marginBottom: '28px' }}>
           <button
-            className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`}
+            className={`segmented-btn ${activeTab === 'overview' ? 'active' : ''}`}
             onClick={() => setActiveTab('overview')}
           >
             Ledger Overview
           </button>
           <button
-            className={`tab-btn ${activeTab === 'balances' ? 'active' : ''}`}
+            className={`segmented-btn ${activeTab === 'balances' ? 'active' : ''}`}
             onClick={() => setActiveTab('balances')}
           >
-            Settlement Plan & Balances
+            Settlement Plan
           </button>
           <button
-            className={`tab-btn ${activeTab === 'expenses' ? 'active' : ''}`}
+            className={`segmented-btn ${activeTab === 'expenses' ? 'active' : ''}`}
             onClick={() => setActiveTab('expenses')}
           >
-            Expenses & Receipts ({expenses.length})
+            Expenses ({expenses.length})
           </button>
           <button
-            className={`tab-btn ${activeTab === 'telemetry' ? 'active' : ''}`}
+            className={`segmented-btn ${activeTab === 'telemetry' ? 'active' : ''}`}
             onClick={() => setActiveTab('telemetry')}
           >
-            Architecture Telemetry
+            Architecture
           </button>
         </div>
 
@@ -247,6 +311,7 @@ export const App: React.FC = () => {
                   expenses={expenses}
                   currency={currentGroup.currency}
                   onOpenNewExpense={() => setIsExpenseModalOpen(true)}
+                  onSelectExpense={setSelectedExpense}
                 />
                 <ActivityMockup events={demoStore.events} />
               </>
@@ -267,6 +332,7 @@ export const App: React.FC = () => {
                 expenses={expenses}
                 currency={currentGroup.currency}
                 onOpenNewExpense={() => setIsExpenseModalOpen(true)}
+                onSelectExpense={setSelectedExpense}
               />
             )}
 
@@ -293,6 +359,26 @@ export const App: React.FC = () => {
         onClose={() => setIsGroupModalOpen(false)}
         onSubmit={handleCreateGroup}
       />
+
+      {currentGroup && (
+        <AddMemberModal
+          isOpen={isAddMemberModalOpen}
+          groupName={groups.find((g) => g.id === addMemberGroupId)?.name || 'Group'}
+          onClose={() => setIsAddMemberModalOpen(false)}
+          onSubmit={handleAddMember}
+        />
+      )}
+
+      {currentGroup && selectedExpense && (
+        <ExpenseDetailModal
+          expense={selectedExpense}
+          group={currentGroup}
+          isOpen={!!selectedExpense}
+          onClose={() => setSelectedExpense(null)}
+          onDelete={handleDeleteExpense}
+          onUpdate={handleUpdateExpense}
+        />
+      )}
 
       <AuthModal
         isOpen={isAuthModalOpen}

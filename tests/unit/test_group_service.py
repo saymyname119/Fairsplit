@@ -134,3 +134,16 @@ async def test_remove_self_blocked(group_service):
 
     with pytest.raises(ConflictError, match="Cannot remove yourself"):
         await group_service.remove_member("g1", "user-1", "user-1")
+
+
+@pytest.mark.asyncio
+async def test_list_user_groups(group_service):
+    mock_group = _make_mock_group("g1", "Group 1")
+    group_service._repo.list_by_user = AsyncMock(return_value=[mock_group])
+
+    groups = await group_service.list_user_groups("user-1")
+    assert len(groups) == 1
+    assert groups[0].id == "g1"
+    assert groups[0].name == "Group 1"
+    group_service._repo.list_by_user.assert_called_once_with("user-1")
+

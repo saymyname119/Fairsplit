@@ -8,9 +8,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from modules.expense import ExpenseService
+from modules.expense import ExpenseService, UpdateExpenseRequest
 from modules.expense.models import ExpenseORM, SplitORM
-from shared.errors import NotFoundError
+from shared.errors import ForbiddenError, NotFoundError
 
 
 @pytest.fixture
@@ -119,3 +119,33 @@ async def test_list_expenses_group_not_found(expense_service):
 
     with pytest.raises(NotFoundError):
         await expense_service.list_expenses("g-missing")
+
+
+@pytest.mark.asyncio
+async def test_update_expense_happy_path(expense_service):
+    mock_expense = _make_mock_expense()
+    mock_splits = [_make_mock_split()]
+    expense_service._repo.get_by_id_or_raise = AsyncMock(
+        return_value=(mock_expense, mock_splits)
+    )
+
+    req = UpdateExpenseRequest(description="Updated Dinner", amount=Decimal("45"))
+    updated = await expense_service.update_expense("exp-1", req, updated_by_id="user-1")
+
+    assert updated.description == "Updated Dinner"
+    assert updated.amount == Decimal("45")
+    assert mock_expense.description == "Updated Dinner"
+
+
+@pytest.mark.asyncio
+async def test_update_expense_unauthorized(expense_service):
+    mock_expense = _make_mock_expense()
+    expense_service._repo.get_by_id_or_raise = AsyncMock(
+        return_value=(mock_expense, [])
+    )
+    expense_service._group_repo.get_member = AsyncMock(return_value=None)
+
+    req = UpdateExpenseRequest(description="Hacked")
+    with pytest.raises(ForbiddenError):
+        await expense_service.update_expense("exp-1", req, updated_by_id="other-user")
+

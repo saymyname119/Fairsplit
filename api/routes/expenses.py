@@ -8,8 +8,15 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth_dependency import get_current_user
-from modules.expense import CreateExpenseRequest, Expense, ExpenseService
+from modules.expense import (
+    CreateExpenseRequest,
+    Expense,
+    ExpenseService,
+    UpdateExpenseRequest,
+)
+from modules.ledger import LedgerService
 from shared.db.session import get_db
+from shared.events import ExpenseCreated, ExpenseSplitEvent
 
 router = APIRouter()
 
@@ -34,7 +41,25 @@ async def create_expense(
 ) -> Expense:
     """POST /groups/:id/expenses"""
     service = ExpenseService(db)
-    return await service.create_expense(group_id, request)
+    expense = await service.create_expense(group_id, request)
+
+    # Atomically update ledger balances in the same transaction
+    ledger_service = LedgerService(db)
+    await ledger_service.handle_expense_created(
+        ExpenseCreated(
+            expense_id=expense.id,
+            group_id=group_id,
+            paid_by_id=expense.paid_by_id,
+            amount=expense.amount,
+            description=expense.description,
+            splits=[
+                ExpenseSplitEvent(user_id=s.user_id, owed_amount=s.owed_amount)
+                for s in expense.splits
+            ],
+        )
+    )
+
+    return expense
 
 
 @router.get(
@@ -95,5 +120,40 @@ async def delete_expense(
     current_user: dict[str, Any] = Depends(get_current_user),
 ) -> None:
     """DELETE /groups/:id/expenses/:id"""
+    user_id = current_user.get("user_id") or current_user.get("sub", "")
     service = ExpenseService(db)
-    await service.delete_expense(expense_id, current_user["user_id"])
+    await service.delete_expense(expense_id, user_id)
+
+    # Recalculate group balances under row-level locks
+    ledger_service = LedgerService(db)
+    await ledger_service.recalculate_group_balances(group_id)
+
+
+@router.patch(
+    "/{group_id}/expenses/{expense_id}",
+    summary="Update an expense",
+    response_model=Expense,
+    responses={
+        200: {"description": "Expense updated"},
+        403: {"description": "Not authorized to update this expense"},
+        404: {"description": "Expense not found"},
+    },
+)
+async def update_expense(
+    group_id: str,
+    expense_id: str,
+    request: UpdateExpenseRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict[str, Any] = Depends(get_current_user),
+) -> Expense:
+    """PATCH /groups/:id/expenses/:expense_id"""
+    user_id = current_user.get("user_id") or current_user.get("sub", "")
+    service = ExpenseService(db)
+    expense = await service.update_expense(expense_id, request, user_id)
+
+    # Recalculate group balances under row-level locks
+    ledger_service = LedgerService(db)
+    await ledger_service.recalculate_group_balances(group_id)
+
+    return expense
+

@@ -6,6 +6,7 @@ from modules.expense.models import (
     Split,
     SplitInput,
     SplitType,
+    UpdateExpenseRequest,
 )
 from modules.expense.service import ExpenseService, IExpenseService
 
@@ -15,6 +16,8 @@ __all__ = [
     "SplitInput",
     "SplitType",
     "CreateExpenseRequest",
+    "UpdateExpenseRequest",
     "IExpenseService",
     "ExpenseService",
 ]
+

@@ -343,7 +343,23 @@ export class ApiClient {
       });
       if (res.ok) {
         demoStore.logEvent('GET', '/groups/', res.status, 'Retrieved live groups list', false, 15);
-        return await res.json();
+        const rawGroups = await res.json();
+        return rawGroups.map((g: any) => ({
+          id: g.id,
+          name: g.name,
+          currency: g.currency || 'USD',
+          created_by: g.created_by_id || g.created_by || '',
+          created_at: g.created_at,
+          members: (g.members || []).map((m: any) => ({
+            user_id: m.user_id,
+            user: m.user || {
+              id: m.user_id,
+              name: m.user_name || 'Member',
+              email: m.user_email || '',
+            },
+            joined_at: m.joined_at,
+          })),
+        }));
       }
     } catch (err) {
       console.warn('Backend unavailable, fallback to demo groups', err);
@@ -372,11 +388,26 @@ export class ApiClient {
         'Content-Type': 'application/json',
         ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
       },
-      body: JSON.stringify({ name, currency, created_by: createdBy }),
+      body: JSON.stringify({ name, description: `Currency: ${currency}` }),
     });
-    const data = await res.json();
+    const g = await res.json();
     demoStore.logEvent('POST', '/groups/', res.status, `Created group: "${name}"`, false, 28);
-    return data;
+    return {
+      id: g.id,
+      name: g.name,
+      currency,
+      created_by: g.created_by_id || createdBy,
+      created_at: g.created_at,
+      members: (g.members || []).map((m: any) => ({
+        user_id: m.user_id,
+        user: m.user || {
+          id: m.user_id,
+          name: m.user_name || 'Member',
+          email: m.user_email || '',
+        },
+        joined_at: m.joined_at,
+      })),
+    };
   }
 
   async getExpenses(groupId: string): Promise<Expense[]> {
@@ -391,7 +422,23 @@ export class ApiClient {
       });
       if (res.ok) {
         demoStore.logEvent('GET', `/groups/${groupId}/expenses`, 200, 'Loaded live expenses', false, 18);
-        return await res.json();
+        const data = await res.json();
+        return data.map((exp: any) => ({
+          id: exp.id,
+          group_id: exp.group_id,
+          description: exp.description,
+          amount: parseFloat(exp.amount) || 0,
+          currency: 'USD',
+          paid_by_id: exp.paid_by_id,
+          paid_by: demoStore.users.find((u) => u.id === exp.paid_by_id),
+          split_strategy: (exp.split_type === 'percent' ? 'PERCENTAGE' : exp.split_type === 'exact' ? 'EXACT' : 'EQUAL') as SplitStrategy,
+          splits: (exp.splits || []).map((s: any) => ({
+            user_id: s.user_id,
+            amount: parseFloat(s.owed_amount) || 0,
+            percentage: s.percentage ? parseFloat(s.percentage) : undefined,
+          })),
+          created_at: exp.created_at || new Date().toISOString(),
+        }));
       }
     } catch (err) {
       console.warn('API error, fallback to demo expenses', err);
@@ -413,17 +460,127 @@ export class ApiClient {
       demoStore.logEvent('DEL', `cache:balance:${expense.group_id}`, 200, 'Invalidated Redis balance cache (Write-Invalidate)', false, 1);
       return newExp;
     }
+
+    const splitTypeMap: Record<SplitStrategy, 'equal' | 'percent' | 'exact'> = {
+      EQUAL: 'equal',
+      PERCENTAGE: 'percent',
+      EXACT: 'exact',
+      SHARE: 'equal',
+    };
+    const split_type = splitTypeMap[expense.split_strategy] || 'equal';
+    const participants = Array.from(
+      new Set([expense.paid_by_id, ...expense.splits.map((s) => s.user_id)])
+    );
+    const backendSplits = expense.splits.map((s) => ({
+      user_id: s.user_id,
+      value: s.percentage ?? s.amount ?? 1,
+    }));
+
+    const backendPayload = {
+      paid_by_id: expense.paid_by_id,
+      amount: expense.amount,
+      description: expense.description,
+      split_type,
+      participants,
+      splits: split_type === 'equal' ? undefined : backendSplits,
+    };
+
     const res = await fetch(`${API_BASE}/groups/${expense.group_id}/expenses`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
       },
-      body: JSON.stringify(expense),
+      body: JSON.stringify(backendPayload),
     });
     const data = await res.json();
     demoStore.logEvent('POST', `/groups/${expense.group_id}/expenses`, res.status, `Added expense`, false, 32);
-    return data;
+
+    return {
+      id: data.id,
+      group_id: data.group_id,
+      description: data.description,
+      amount: parseFloat(data.amount) || expense.amount,
+      currency: expense.currency || 'USD',
+      paid_by_id: data.paid_by_id,
+      paid_by: demoStore.users.find((u) => u.id === data.paid_by_id),
+      split_strategy: expense.split_strategy,
+      splits: Array.isArray(data.splits)
+        ? data.splits.map((s: any) => ({ user_id: s.user_id, amount: parseFloat(s.owed_amount) || 0 }))
+        : expense.splits,
+      created_at: data.created_at || new Date().toISOString(),
+    };
+  }
+
+  async deleteExpense(expenseId: string, groupId: string): Promise<void> {
+    if (this.isDemoMode) {
+      const idx = demoStore.expenses.findIndex((e) => e.id === expenseId);
+      if (idx !== -1) {
+        const exp = demoStore.expenses[idx];
+        demoStore.expenses.splice(idx, 1);
+        demoStore.save();
+        demoStore.logEvent('DELETE', `/groups/${groupId}/expenses/${expenseId}`, 200, `Deleted "${exp.description}"`, false, 5);
+        demoStore.logEvent('DEL', `cache:balance:${groupId}`, 200, 'Invalidated Redis balance cache', false, 1);
+      }
+      return;
+    }
+    const res = await fetch(`${API_BASE}/groups/${groupId}/expenses/${expenseId}`, {
+      method: 'DELETE',
+      headers: this.token ? { Authorization: `Bearer ${this.token}` } : {},
+    });
+    demoStore.logEvent('DELETE', `/groups/${groupId}/expenses/${expenseId}`, res.status, 'Deleted expense', false, 20);
+  }
+
+  async updateExpense(expenseId: string, groupId: string, updates: {
+    description?: string;
+    amount?: number;
+    paid_by_id?: string;
+    split_strategy?: SplitStrategy;
+    splits?: SplitItem[];
+  }): Promise<Expense> {
+    if (this.isDemoMode) {
+      const idx = demoStore.expenses.findIndex((e) => e.id === expenseId);
+      if (idx === -1) throw new Error('Expense not found');
+      const updated: Expense = {
+        ...demoStore.expenses[idx],
+        ...updates,
+        paid_by: updates.paid_by_id
+          ? demoStore.users.find((u) => u.id === updates.paid_by_id)
+          : demoStore.expenses[idx].paid_by,
+      };
+      demoStore.expenses[idx] = updated;
+      demoStore.save();
+      demoStore.logEvent('PATCH', `/groups/${groupId}/expenses/${expenseId}`, 200, `Updated "${updated.description}"`, false, 8);
+      demoStore.logEvent('DEL', `cache:balance:${groupId}`, 200, 'Invalidated Redis balance cache', false, 1);
+      return updated;
+    }
+    const res = await fetch(`${API_BASE}/groups/${groupId}/expenses/${expenseId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
+      },
+      body: JSON.stringify({
+        description: updates.description,
+        amount: updates.amount,
+        paid_by_id: updates.paid_by_id,
+      }),
+    });
+    const data = await res.json();
+    demoStore.logEvent('PATCH', `/groups/${groupId}/expenses/${expenseId}`, res.status, 'Updated expense', false, 28);
+    return {
+      ...updates,
+      id: data.id,
+      group_id: data.group_id || groupId,
+      description: data.description || updates.description || '',
+      amount: parseFloat(data.amount) || updates.amount || 0,
+      currency: 'USD',
+      paid_by_id: data.paid_by_id || updates.paid_by_id || '',
+      paid_by: demoStore.users.find((u) => u.id === (data.paid_by_id || updates.paid_by_id)),
+      split_strategy: updates.split_strategy || 'EQUAL',
+      splits: updates.splits || [],
+      created_at: data.created_at || new Date().toISOString(),
+    };
   }
 
   async getBalances(groupId: string): Promise<Record<string, number>> {
@@ -438,7 +595,18 @@ export class ApiClient {
       });
       if (res.ok) {
         demoStore.logEvent('GET', `/groups/${groupId}/balances`, 200, 'Loaded live balances (cached in Redis)', true, 6);
-        return await res.json();
+        const raw = await res.json();
+        if (Array.isArray(raw)) {
+          const map: Record<string, number> = {};
+          raw.forEach((b: any) => {
+            const amt = parseFloat(b.net_amount) || 0;
+            map[b.creditor_id] = (map[b.creditor_id] || 0) + amt;
+            map[b.debtor_id] = (map[b.debtor_id] || 0) - amt;
+          });
+          return map;
+        } else if (typeof raw === 'object' && raw !== null) {
+          return raw;
+        }
       }
     } catch {
       // fallback
@@ -458,7 +626,23 @@ export class ApiClient {
       });
       if (res.ok) {
         demoStore.logEvent('GET', `/groups/${groupId}/balances/simplified`, 200, 'Computed simplified settlement graph', false, 12);
-        return await res.json();
+        const raw = await res.json();
+        const list = Array.isArray(raw) ? raw : (raw.simplified || []);
+        const group = demoStore.groups.find((g) => g.id === groupId);
+        return list.map((item: any) => ({
+          from_user_id: item.from_user_id,
+          from_user_name:
+            group?.members.find((m) => m.user_id === item.from_user_id)?.user.name ||
+            demoStore.users.find((u) => u.id === item.from_user_id)?.name ||
+            item.from_user_id,
+          to_user_id: item.to_user_id,
+          to_user_name:
+            group?.members.find((m) => m.user_id === item.to_user_id)?.user.name ||
+            demoStore.users.find((u) => u.id === item.to_user_id)?.name ||
+            item.to_user_id,
+          amount: parseFloat(item.amount) || 0,
+          currency: group?.currency || 'USD',
+        }));
       }
     } catch {
       // fallback
@@ -495,11 +679,101 @@ export class ApiClient {
         'Content-Type': 'application/json',
         ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
       },
-      body: JSON.stringify({ payer_id: payerId, payee_id: payeeId, amount, currency }),
+      body: JSON.stringify({
+        from_user_id: payerId,
+        to_user_id: payeeId,
+        amount,
+        notes: 'Settlement payment',
+      }),
     });
     demoStore.logEvent('POST', `/groups/${groupId}/settle`, res.status, `Settlement recorded`, false, 24);
     return await res.json();
   }
+
+  async addMember(groupId: string, name: string, email: string): Promise<Group | null> {
+    if (this.isDemoMode) {
+      const group = demoStore.groups.find((g) => g.id === groupId);
+      if (!group) return null;
+
+      // Check for duplicate email
+      const existingUser = demoStore.users.find((u) => u.email === email);
+      if (existingUser && group.members.some((m) => m.user_id === existingUser.id)) {
+        throw new Error('This person is already a member of this group.');
+      }
+
+      // Create or reuse user
+      const user: User = existingUser || {
+        id: 'usr_' + Math.random().toString(36).substring(2, 8),
+        name,
+        email,
+      };
+
+      if (!existingUser) {
+        demoStore.users.push(user);
+      }
+
+      group.members.push({
+        user_id: user.id,
+        user,
+        joined_at: new Date().toISOString(),
+      });
+
+      demoStore.save();
+      demoStore.logEvent('POST', `/groups/${groupId}/members`, 200, `Added member "${name}"`, false, 6);
+      return { ...group };
+    }
+
+    const res = await fetch(`${API_BASE}/groups/${groupId}/members`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
+      },
+      body: JSON.stringify({ user_id: email }), // Backend expects user_id
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Failed to add member' }));
+      throw new Error(err.detail || 'Failed to add member');
+    }
+    demoStore.logEvent('POST', `/groups/${groupId}/members`, res.status, `Added member`, false, 18);
+    const g = await res.json();
+    return {
+      id: g.id,
+      name: g.name,
+      currency: g.currency || 'USD',
+      created_by: g.created_by_id || g.created_by || '',
+      created_at: g.created_at,
+      members: (g.members || []).map((m: any) => ({
+        user_id: m.user_id,
+        user: m.user || { id: m.user_id, name: m.user_name || 'Member', email: m.user_email || '' },
+        joined_at: m.joined_at,
+      })),
+    };
+  }
+
+  async removeMember(groupId: string, userId: string): Promise<boolean> {
+    if (this.isDemoMode) {
+      const group = demoStore.groups.find((g) => g.id === groupId);
+      if (!group) return false;
+
+      const idx = group.members.findIndex((m) => m.user_id === userId);
+      if (idx === -1) return false;
+
+      const memberName = group.members[idx].user?.name || 'Member';
+      group.members.splice(idx, 1);
+      demoStore.save();
+      demoStore.logEvent('DELETE', `/groups/${groupId}/members/${userId}`, 204, `Removed member "${memberName}"`, false, 5);
+      return true;
+    }
+
+    const res = await fetch(`${API_BASE}/groups/${groupId}/members/${userId}`, {
+      method: 'DELETE',
+      headers: this.token ? { Authorization: `Bearer ${this.token}` } : {},
+    });
+    demoStore.logEvent('DELETE', `/groups/${groupId}/members/${userId}`, res.status, 'Removed member', false, 15);
+    return res.ok || res.status === 204;
+  }
 }
 
 export const api = new ApiClient();
+

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, Key, Shield, UserPlus, LogIn, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { api, type User, SEED_USERS } from '../api/client';
-import { signInWithGoogle } from '../utils/supabase';
+import { signInWithGoogle, signOutSupabase } from '../utils/supabase';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -153,9 +153,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     api.clearToken();
     localStorage.removeItem('sw_refresh_token');
+    if (supabaseSession) {
+      try {
+        await signOutSupabase();
+      } catch (err) {
+        console.warn('Supabase sign-out error:', err);
+      }
+      onSupabaseLogout?.();
+    }
     api.isDemoMode = true;
     onSelectUser(SEED_USERS[0]);
     resetForm();

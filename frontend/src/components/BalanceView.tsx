@@ -76,14 +76,14 @@ export const BalanceView: React.FC<BalanceViewProps> = ({
                       fontSize: '13px',
                     }}
                   >
-                    {m.user.name.charAt(0)}
+                    {(m.user?.name || 'M').charAt(0).toUpperCase()}
                   </div>
                   <div>
                     <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--color-ink)' }}>
-                      {m.user.name}
+                      {m.user?.name || 'Member'}
                     </div>
                     <div className="caption" style={{ color: 'var(--color-muted-soft)' }}>
-                      {m.user.email}
+                      {m.user?.email || ''}
                     </div>
                   </div>
                 </div>

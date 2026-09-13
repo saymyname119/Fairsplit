@@ -1,5 +1,5 @@
 from decimal import Decimal
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -59,7 +59,7 @@ async def test_record_settlement_reduces_balance(ledger_service):
         return settlement
 
     ledger_service._repo.record_settlement = AsyncMock(side_effect=mock_record_settlement)
-    ledger_service._bus.publish = AsyncMock()
+    ledger_service._bus.publish = MagicMock()
 
     settlement = await ledger_service.record_settlement("group-1", request)
     assert settlement.amount == Decimal("10")

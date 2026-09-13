@@ -166,3 +166,18 @@ class CreateExpenseRequest(BaseModel):
     def amount_precision(cls, v: Decimal) -> Decimal:
         """Enforce max 4 decimal places on input."""
         return round(v, 4)
+
+
+class UpdateExpenseRequest(BaseModel):
+    description: str | None = Field(default=None, min_length=1, max_length=500)
+    amount: Decimal | None = Field(default=None, gt=0)
+    paid_by_id: str | None = None
+    notes: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("amount")
+    @classmethod
+    def amount_precision(cls, v: Decimal | None) -> Decimal | None:
+        if v is not None:
+            return round(v, 4)
+        return v
+

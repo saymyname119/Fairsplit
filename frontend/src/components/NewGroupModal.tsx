@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Users, AlertCircle } from 'lucide-react';
 
 interface NewGroupModalProps {
@@ -8,11 +8,17 @@ interface NewGroupModalProps {
 }
 
 export const NewGroupModal: React.FC<NewGroupModalProps> = ({ isOpen, onClose, onSubmit }) => {
-  if (!isOpen) return null;
-
   const [name, setName] = useState('');
   const [currency, setCurrency] = useState('USD');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setName('');
+      setCurrency('USD');
+      setErrorMsg(null);
+    }
+  }, [isOpen]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,6 +29,8 @@ export const NewGroupModal: React.FC<NewGroupModalProps> = ({ isOpen, onClose, o
     onSubmit(name.trim(), currency);
     onClose();
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="modal-overlay" onClick={onClose}>

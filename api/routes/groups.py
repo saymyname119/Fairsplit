@@ -37,6 +37,21 @@ async def create_group(
 
 
 @router.get(
+    "/",
+    summary="List groups for the current user",
+    response_model=list[Group],
+    responses={200: {"description": "List of groups the authenticated user belongs to"}},
+)
+async def list_groups(
+    db: AsyncSession = Depends(get_db),
+    current_user: dict[str, Any] = Depends(get_current_user),
+) -> list[Group]:
+    """GET /groups — returns all groups the authenticated user is a member of."""
+    service = GroupService(db)
+    return await service.list_user_groups(current_user["user_id"])
+
+
+@router.get(
     "/{group_id}",
     summary="Get group details",
     response_model=Group,

@@ -64,3 +64,15 @@ class GroupRepository:
         )
         await self._session.execute(stmt)
         await self._session.flush()
+
+    async def list_by_user(self, user_id: str) -> list[GroupORM]:
+        stmt = (
+            select(GroupORM)
+            .join(GroupMemberORM, GroupMemberORM.group_id == GroupORM.id)
+            .where(GroupMemberORM.user_id == user_id)
+            .options(selectinload(GroupORM.members).joinedload(GroupMemberORM.user))
+            .order_by(GroupORM.created_at.desc())
+        )
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
+
