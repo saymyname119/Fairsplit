@@ -309,7 +309,7 @@ class DemoStore {
 export const demoStore = new DemoStore();
 
 // Live API and configuration state
-const API_BASE = '/api';
+export const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
 
 export class ApiClient {
   private token: string | null = localStorage.getItem('sw_token');

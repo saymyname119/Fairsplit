@@ -43,8 +43,9 @@ COPY . .
 RUN adduser --disabled-password --gecos "" appuser && chown -R appuser /app
 USER appuser
 
+ENV PORT=8000
 EXPOSE 8000
 
 # CMD is overridden by docker-compose for dev hot-reload.
-# This CMD is for production: single worker, bind to all interfaces.
-CMD ["uvicorn", "api.app:app", "--host", "0.0.0.0", "--port", "8000"]
+# This CMD is for production: single worker, dynamic port binding.
+CMD ["sh", "-c", "uvicorn api.app:app --host 0.0.0.0 --port ${PORT:-8000}"]

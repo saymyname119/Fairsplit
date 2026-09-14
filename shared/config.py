@@ -55,6 +55,9 @@ class Settings(BaseSettings):
     resend_from_email: str = Field(default="Splitwise <onboarding@resend.dev>")
     app_base_url: str = Field(default="http://localhost:5173")
 
+    # ── CORS ──────────────────────────────────────────────────
+    cors_origins: str = Field(default="")
+
     @property
     def is_production(self) -> bool:
         return self.environment == "production"

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, Key, Shield, UserPlus, LogIn, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { api, type User, SEED_USERS } from '../api/client';
+import { api, type User, SEED_USERS, API_BASE } from '../api/client';
 import { signInWithGoogle, signOutSupabase } from '../utils/supabase';
 
 interface AuthModalProps {
@@ -70,7 +70,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     try {
       if (mode === 'signup') {
         // Step 1: Register
-        const signupRes = await fetch('/api/users/', {
+        const signupRes = await fetch(`${API_BASE}/users/`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, name, password }),
@@ -84,7 +84,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         const newUser = await signupRes.json();
 
         // Step 2: Immediately log in to get JWT
-        const loginRes = await fetch('/api/auth/login', {
+        const loginRes = await fetch(`${API_BASE}/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password }),
@@ -113,7 +113,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
       } else {
         // Login
-        const res = await fetch('/api/auth/login', {
+        const res = await fetch(`${API_BASE}/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password }),
