@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   api,
-  demoStore,
-  SEED_USERS,
   type Group,
   type Expense,
   type User,
@@ -16,7 +14,6 @@ import { HeroBand } from './components/HeroBand';
 import { GroupSelector } from './components/GroupSelector';
 import { BalanceView } from './components/BalanceView';
 import { ExpensesList } from './components/ExpensesList';
-import { ActivityMockup } from './components/ActivityMockup';
 import { ExpenseModal } from './components/ExpenseModal';
 import { ExpenseDetailModal } from './components/ExpenseDetailModal';
 import { NewGroupModal } from './components/NewGroupModal';
@@ -26,14 +23,21 @@ import { AuthModal } from './components/AuthModal';
 import { Footer } from './components/Footer';
 
 export const App: React.FC = () => {
-  const [currentUser, setCurrentUser] = useState<User>(SEED_USERS[0]);
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    try {
+      const saved = localStorage.getItem('sw_current_user');
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // ignore
+    }
+    return null;
+  });
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<string>('');
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [balances, setBalances] = useState<Record<string, number>>({});
   const [simplifiedDebts, setSimplifiedDebts] = useState<SettlementTransaction[]>([]);
-  const [isDemoMode, setIsDemoMode] = useState<boolean>(api.isDemoMode);
-  const [activeTab, setActiveTab] = useState<'overview' | 'balances' | 'expenses' | 'telemetry'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'balances' | 'expenses'>('overview');
 
   // Modals state
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
@@ -60,7 +64,6 @@ export const App: React.FC = () => {
   useEffect(() => {
     const init = async () => {
       await api.checkLiveBackend();
-      setIsDemoMode(api.isDemoMode);
       const fetchedGroups = await api.getGroups();
       setGroups(fetchedGroups);
       if (fetchedGroups.length > 0) {
@@ -78,17 +81,17 @@ export const App: React.FC = () => {
       setSupabaseSession(session);
       if (session?.user) {
         const meta = session.user.user_metadata;
-        setCurrentUser({
+        const userObj: User = {
           id: session.user.id,
           name: meta?.full_name || meta?.name || session.user.email?.split('@')[0] || 'User',
           email: session.user.email || '',
           avatar_url: meta?.avatar_url || meta?.picture,
-        });
+        };
+        setCurrentUser(userObj);
+        localStorage.setItem('sw_current_user', JSON.stringify(userObj));
         if (session.access_token) {
           api.setToken(session.access_token);
         }
-        api.isDemoMode = false;
-        setIsDemoMode(false);
       }
     });
 
@@ -97,20 +100,21 @@ export const App: React.FC = () => {
       setSupabaseSession(session);
       if (session && user) {
         const meta = user.user_metadata;
-        setCurrentUser({
+        const userObj: User = {
           id: user.id,
           name: meta?.full_name || meta?.name || user.email?.split('@')[0] || 'User',
           email: user.email || '',
           avatar_url: meta?.avatar_url || meta?.picture,
-        });
+        };
+        setCurrentUser(userObj);
+        localStorage.setItem('sw_current_user', JSON.stringify(userObj));
         if (session.access_token) {
           api.setToken(session.access_token);
         }
-        api.isDemoMode = false;
-        setIsDemoMode(false);
       } else if (!session) {
         api.clearToken();
-        setCurrentUser(SEED_USERS[0]);
+        localStorage.removeItem('sw_current_user');
+        setCurrentUser(null);
       }
     });
 
@@ -133,7 +137,7 @@ export const App: React.FC = () => {
     };
 
     loadGroupData();
-  }, [selectedGroupId, isDemoMode]);
+  }, [selectedGroupId]);
 
   const currentGroup = groups.find((g) => g.id === selectedGroupId) || groups[0] || null;
   const userNetBalance = currentUser ? balances[currentUser.id] || 0 : 0;
@@ -168,7 +172,7 @@ export const App: React.FC = () => {
 
   // Create Group Handler
   const handleCreateGroup = async (name: string, currency: string) => {
-    const newGrp = await api.createGroup(name, currency, currentUser.id);
+    const newGrp = await api.createGroup(name, currency, currentUser?.id || '');
     setGroups([newGrp, ...groups]);
     setSelectedGroupId(newGrp.id);
   };
@@ -194,7 +198,7 @@ export const App: React.FC = () => {
   const handleUpdateExpense = async (expenseId: string, updates: Parameters<typeof api.updateExpense>[2]) => {
     if (!selectedGroupId) return;
     const updated = await api.updateExpense(expenseId, selectedGroupId, updates);
-    setExpenses(expenses.map((e) => e.id === expenseId ? updated : e));
+    setExpenses(expenses.map((e) => (e.id === expenseId ? updated : e)));
     setSelectedExpense(updated);
     await refreshBalances();
   };
@@ -219,10 +223,12 @@ export const App: React.FC = () => {
     if (!confirmed) return;
     const success = await api.removeMember(groupId, userId);
     if (success) {
-      setGroups(groups.map((g) => {
-        if (g.id !== groupId) return g;
-        return { ...g, members: g.members.filter((m) => m.user_id !== userId) };
-      }));
+      setGroups(
+        groups.map((g) => {
+          if (g.id !== groupId) return g;
+          return { ...g, members: g.members.filter((m) => m.user_id !== userId) };
+        })
+      );
       // Refresh balances since member composition changed
       if (groupId === selectedGroupId) {
         await refreshBalances();
@@ -230,26 +236,11 @@ export const App: React.FC = () => {
     }
   };
 
-  // Toggle demo mode
-  const handleToggleDemo = async () => {
-    if (api.isDemoMode) {
-      const liveOk = await api.checkLiveBackend();
-      if (!liveOk) {
-        alert('FastAPI backend is currently offline at http://localhost:8000. Running in Demo Sandbox mode!');
-      }
-    } else {
-      api.isDemoMode = true;
-    }
-    setIsDemoMode(api.isDemoMode);
-  };
-
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       {/* Navigation */}
       <TopNav
         currentUser={currentUser}
-        isDemoMode={isDemoMode}
-        onToggleDemo={handleToggleDemo}
         onOpenAuth={() => setIsAuthModalOpen(true)}
         onOpenNewGroup={() => setIsGroupModalOpen(true)}
         onOpenNewExpense={() => setIsExpenseModalOpen(true)}
@@ -298,16 +289,10 @@ export const App: React.FC = () => {
           >
             Expenses ({expenses.length})
           </button>
-          <button
-            className={`segmented-btn ${activeTab === 'telemetry' ? 'active' : ''}`}
-            onClick={() => setActiveTab('telemetry')}
-          >
-            Architecture
-          </button>
         </div>
 
         {/* Tab Content */}
-        {currentGroup && (
+        {currentGroup ? (
           <>
             {activeTab === 'overview' && (
               <>
@@ -324,7 +309,6 @@ export const App: React.FC = () => {
                   onOpenNewExpense={() => setIsExpenseModalOpen(true)}
                   onSelectExpense={setSelectedExpense}
                 />
-                <ActivityMockup events={demoStore.events} />
               </>
             )}
 
@@ -346,9 +330,32 @@ export const App: React.FC = () => {
                 onSelectExpense={setSelectedExpense}
               />
             )}
-
-            {activeTab === 'telemetry' && <ActivityMockup events={demoStore.events} />}
           </>
+        ) : (
+          <div
+            style={{
+              textAlign: 'center',
+              padding: '64px 20px',
+              backgroundColor: 'var(--color-card)',
+              borderRadius: 'var(--radius-lg)',
+              border: '1px dashed var(--color-hairline)',
+              marginTop: '16px',
+            }}
+          >
+            <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--color-primary)', marginBottom: '8px' }}>
+              No ledger selected
+            </h3>
+            <p style={{ fontSize: '14px', color: 'var(--color-secondary)', maxWidth: '440px', margin: '0 auto 20px' }}>
+              Create your first shared group ledger or sign in to collaborate with your team and split expenses seamlessly.
+            </p>
+            <button
+              className="btn btn-primary"
+              onClick={() => setIsGroupModalOpen(true)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+            >
+              + Create Ledger
+            </button>
+          </div>
         )}
       </main>
 
@@ -411,13 +418,20 @@ export const App: React.FC = () => {
         currentUser={currentUser}
         supabaseSession={supabaseSession}
         onClose={() => setIsAuthModalOpen(false)}
-        onSelectUser={(u) => setCurrentUser(u)}
+        onSelectUser={(u) => {
+          setCurrentUser(u);
+          if (u) {
+            localStorage.setItem('sw_current_user', JSON.stringify(u));
+          } else {
+            localStorage.removeItem('sw_current_user');
+          }
+        }}
         onSupabaseLogout={async () => {
           await signOutSupabase();
           setSupabaseSession(null);
-          api.isDemoMode = true;
-          setIsDemoMode(true);
-          setCurrentUser(SEED_USERS[0]);
+          api.clearToken();
+          localStorage.removeItem('sw_current_user');
+          setCurrentUser(null);
           setIsAuthModalOpen(false);
         }}
       />

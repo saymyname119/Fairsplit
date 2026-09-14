@@ -54,14 +54,41 @@ export const GroupSelector: React.FC<GroupSelectorProps> = ({
         </button>
       </div>
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-          gap: '16px',
-        }}
-      >
-        {groups.map((group) => {
+      {groups.length === 0 ? (
+        <div
+          className="card-white"
+          style={{
+            padding: '36px 24px',
+            textAlign: 'center',
+            borderRadius: 'var(--radius-lg)',
+            border: '1px dashed var(--color-hairline)',
+          }}
+        >
+          <Users size={32} style={{ color: 'var(--color-muted)', margin: '0 auto 12px' }} />
+          <h3 style={{ fontSize: '16px', fontFamily: 'var(--font-display)', marginBottom: '6px', color: 'var(--color-ink)' }}>
+            No groups created yet
+          </h3>
+          <p style={{ fontSize: '13px', color: 'var(--color-muted)', maxWidth: '420px', margin: '0 auto 16px' }}>
+            Create your first group for travel, housemates, or dinners to start splitting expenses.
+          </p>
+          <button
+            onClick={onOpenNewGroup}
+            className="btn btn-primary"
+            style={{ height: '34px', padding: '0 18px', fontSize: '13px' }}
+          >
+            <Plus size={14} />
+            <span>Create First Group</span>
+          </button>
+        </div>
+      ) : (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+            gap: '16px',
+          }}
+        >
+          {groups.map((group) => {
           const isSelected = group.id === selectedGroupId;
           return (
             <div
@@ -203,7 +230,8 @@ export const GroupSelector: React.FC<GroupSelectorProps> = ({
             </div>
           );
         })}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

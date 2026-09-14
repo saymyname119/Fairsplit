@@ -1,11 +1,9 @@
 import React from 'react';
-import { ShieldCheck, Database, RefreshCw, UserCheck } from 'lucide-react';
+import { UserCheck } from 'lucide-react';
 import type { User } from '../api/client';
 
 interface TopNavProps {
   currentUser: User | null;
-  isDemoMode: boolean;
-  onToggleDemo: () => void;
   onOpenAuth: () => void;
   onOpenNewGroup: () => void;
   onOpenNewExpense: () => void;
@@ -13,8 +11,6 @@ interface TopNavProps {
 
 export const TopNav: React.FC<TopNavProps> = ({
   currentUser,
-  isDemoMode,
-  onToggleDemo,
   onOpenAuth,
   onOpenNewGroup,
   onOpenNewExpense,
@@ -98,42 +94,6 @@ export const TopNav: React.FC<TopNavProps> = ({
 
         {/* Right: controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {/* Mode badge */}
-          <button
-            onClick={onToggleDemo}
-            title="Toggle between Live FastAPI backend & Mock Demo store"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '5px',
-              padding: '5px 12px',
-              borderRadius: 'var(--radius-pill)',
-              border: '1px solid var(--color-hairline)',
-              background: isDemoMode ? 'var(--color-surface-card)' : 'rgba(46, 125, 50, 0.08)',
-              color: isDemoMode ? 'var(--color-body)' : '#2e7d32',
-              fontSize: '12px',
-              fontFamily: 'var(--font-sans)',
-              fontWeight: 500,
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            {isDemoMode ? (
-              <>
-                <Database size={12} style={{ color: 'var(--color-primary)' }} />
-                <span>Demo</span>
-              </>
-            ) : (
-              <>
-                <ShieldCheck size={12} style={{ color: '#2e7d32' }} />
-                <span>Live</span>
-              </>
-            )}
-            <RefreshCw size={10} style={{ opacity: 0.5 }} />
-          </button>
-
-          {/* Divider */}
-          <div style={{ width: '1px', height: '20px', backgroundColor: 'var(--color-hairline)', margin: '0 4px' }} />
 
           {/* New Group — text/ghost style */}
           <button

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, Key, Shield, UserPlus, LogIn, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { api, type User, SEED_USERS, API_BASE } from '../api/client';
+import { api, type User, API_BASE } from '../api/client';
 import { signInWithGoogle, signOutSupabase } from '../utils/supabase';
 
 interface AuthModalProps {
@@ -8,7 +8,7 @@ interface AuthModalProps {
   currentUser: User | null;
   supabaseSession?: import('../utils/supabase').Session | null;
   onClose: () => void;
-  onSelectUser: (user: User) => void;
+  onSelectUser: (user: User | null) => void;
   onSupabaseLogout?: () => void;
 }
 
@@ -96,14 +96,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           localStorage.setItem('sw_refresh_token', tokens.refresh_token);
         }
 
-        // Switch to live mode
-        api.isDemoMode = false;
-
-        onSelectUser({
+        const userData: User = {
           id: newUser.id,
           name: newUser.name,
           email: newUser.email,
-        });
+        };
+        localStorage.setItem('sw_current_user', JSON.stringify(userData));
+        onSelectUser(userData);
 
         setSuccess('Account created! Signing you in…');
         setTimeout(() => {
@@ -131,14 +130,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         // Decode JWT to get user info (sub = user_id, email)
         const payload = JSON.parse(atob(tokens.access_token.split('.')[1]));
 
-        // Switch to live mode
-        api.isDemoMode = false;
-
-        onSelectUser({
+        const userData: User = {
           id: payload.sub,
-          name: email.split('@')[0], // will be overridden by profile fetch
+          name: email.split('@')[0],
           email: payload.email,
-        });
+        };
+        localStorage.setItem('sw_current_user', JSON.stringify(userData));
+        onSelectUser(userData);
 
         setSuccess('Authenticated! Welcome back.');
         setTimeout(() => {
@@ -156,6 +154,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleLogout = async () => {
     api.clearToken();
     localStorage.removeItem('sw_refresh_token');
+    localStorage.removeItem('sw_current_user');
     if (supabaseSession) {
       try {
         await signOutSupabase();
@@ -164,8 +163,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
       onSupabaseLogout?.();
     }
-    api.isDemoMode = true;
-    onSelectUser(SEED_USERS[0]);
+    onSelectUser(null);
     resetForm();
     onClose();
   };
@@ -473,63 +471,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </button>
               </div>
             </form>
-
-            {/* Divider + Demo fallback */}
-            <div style={{ position: 'relative', textAlign: 'center', margin: '24px 0 16px' }}>
-              <hr style={{ border: 'none', borderTop: '1px solid var(--color-hairline)' }} />
-              <span style={{
-                position: 'absolute', top: '50%', left: '50%',
-                transform: 'translate(-50%, -50%)',
-                backgroundColor: 'var(--color-canvas)',
-                padding: '0 12px', fontSize: '11px', color: 'var(--color-muted)',
-              }}>
-                or use demo account
-              </span>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
-              {SEED_USERS.slice(0, 4).map((user) => {
-                const isSelected = currentUser?.id === user.id;
-                return (
-                  <button
-                    key={user.id}
-                    type="button"
-                    onClick={() => {
-                      api.clearToken();
-                      api.isDemoMode = true;
-                      onSelectUser(user);
-                      onClose();
-                    }}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '8px',
-                      padding: '8px', borderRadius: 'var(--radius-sm)',
-                      border: isSelected ? '2px solid var(--color-primary)' : '1px solid var(--color-hairline)',
-                      backgroundColor: isSelected ? 'var(--color-surface-soft)' : 'var(--color-canvas)',
-                      cursor: 'pointer', textAlign: 'left', fontSize: '12px',
-                    }}
-                  >
-                    <div style={{
-                      width: '24px', height: '24px', borderRadius: '50%',
-                      backgroundColor: isSelected ? 'var(--color-primary)' : 'var(--color-surface-card)',
-                      color: isSelected ? '#fff' : 'var(--color-ink)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '11px', fontWeight: 600, flexShrink: 0,
-                    }}>
-                      {user.name.charAt(0)}
-                    </div>
-                    <div style={{ overflow: 'hidden' }}>
-                      <div style={{ fontWeight: 600, color: 'var(--color-ink)', fontSize: '12px' }}>{user.name}</div>
-                      <div style={{ color: 'var(--color-muted-soft)', fontSize: '10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {user.email}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-            <p style={{ fontSize: '10px', color: 'var(--color-muted-soft)', textAlign: 'center', marginTop: '8px' }}>
-              Demo accounts use local mock data (no server required)
-            </p>
           </>
         )}
       </div>
