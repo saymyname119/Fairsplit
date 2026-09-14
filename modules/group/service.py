@@ -94,9 +94,32 @@ class GroupService(IGroupService):
         if not adder_member or adder_member.role != MemberRole.ADMIN:
             raise ForbiddenError("Only admins can add members")
 
+        # Support adding by email directly
+        actual_user_id = request.user_id
+        if "@" in request.user_id:
+            import uuid
+
+            import bcrypt
+
+            from modules.user.models import UserORM
+            from modules.user.repository import UserRepository
+
+            user_repo = UserRepository(self._repo._session)
+            found_user = await user_repo.get_by_email(request.user_id)
+            if not found_user:
+                random_pw = str(uuid.uuid4())
+                hashed_bytes = bcrypt.hashpw(random_pw.encode("utf-8"), bcrypt.gensalt())
+                new_user = UserORM(
+                    email=request.user_id,
+                    name=request.user_id.split("@")[0],
+                    hashed_password=hashed_bytes.decode("utf-8"),
+                )
+                found_user = await user_repo.create(new_user)
+            actual_user_id = found_user.id
+
         orm_member = GroupMemberORM(
             group_id=group_id,
-            user_id=request.user_id,
+            user_id=actual_user_id,
             role=request.role,
         )
 
@@ -112,7 +135,7 @@ class GroupService(IGroupService):
         self._bus.publish(
             MemberAdded(
                 group_id=group_id,
-                user_id=request.user_id,
+                user_id=actual_user_id,
                 added_by_id=adder_id,
             )
         )

@@ -13,7 +13,7 @@ interface ExpenseModalProps {
     paid_by_id: string;
     split_strategy: SplitStrategy;
     splits: SplitItem[];
-  }) => void;
+  }) => Promise<void> | void;
 }
 
 export const ExpenseModal: React.FC<ExpenseModalProps> = ({
@@ -42,12 +42,14 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
   const [shares, setShares] = useState<Record<string, string>>({});
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Reset form fields when modal opens
   useEffect(() => {
     if (isOpen) {
       setDescription('');
       setAmountStr('');
+      setIsSubmitting(false);
       setPaidById(group.members[0]?.user_id || '');
       setSplitStrategy('EQUAL');
       setSelectedUserIds(group.members.map((m) => m.user_id));
@@ -112,7 +114,7 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
     0
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
@@ -179,16 +181,22 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
       });
     }
 
-    onSubmit({
-      description,
-      amount,
-      currency: group.currency,
-      paid_by_id: paidById,
-      split_strategy: splitStrategy,
-      splits,
-    });
-
-    onClose();
+    setIsSubmitting(true);
+    try {
+      await onSubmit({
+        description,
+        amount,
+        currency: group.currency,
+        paid_by_id: paidById,
+        split_strategy: splitStrategy,
+        splits,
+      });
+      onClose();
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Failed to record expense. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -529,11 +537,33 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
 
           {/* Action Buttons */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-            <button type="button" onClick={onClose} className="btn btn-secondary">
+            <button type="button" onClick={onClose} disabled={isSubmitting} className="btn btn-secondary">
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
-              Confirm & Save Expense
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={isSubmitting}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+            >
+              {isSubmitting ? (
+                <>
+                  <span
+                    style={{
+                      width: '14px',
+                      height: '14px',
+                      border: '2px solid rgba(255,255,255,0.4)',
+                      borderTop: '2px solid #fff',
+                      borderRadius: '50%',
+                      animation: 'spin 0.8s linear infinite',
+                      display: 'inline-block',
+                    }}
+                  />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <span>Confirm & Save Expense</span>
+              )}
             </button>
           </div>
         </form>

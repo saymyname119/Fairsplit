@@ -91,3 +91,51 @@ async def test_authenticate_user_not_found(user_service):
 
     with pytest.raises(AuthenticationError):
         await user_service.authenticate(request)
+
+
+@pytest.mark.asyncio
+async def test_sync_oauth_user_new(user_service):
+    user_service._repo.get_by_email = AsyncMock(return_value=None)
+    mock_orm = UserORM(
+        id="oauth-user-123",
+        email="googleuser@example.com",
+        name="Google User",
+        hashed_password="hash",
+        is_active=True,
+        created_at=datetime.now(),
+        updated_at=datetime.now(),
+    )
+    user_service._repo.create = AsyncMock(return_value=mock_orm)
+
+    user, tokens = await user_service.sync_oauth_user(
+        email="googleuser@example.com",
+        name="Google User",
+    )
+    assert user.id == "oauth-user-123"
+    assert user.email == "googleuser@example.com"
+    assert tokens.access_token
+    assert tokens.refresh_token
+
+
+@pytest.mark.asyncio
+async def test_sync_oauth_user_existing(user_service):
+    mock_orm = UserORM(
+        id="existing-123",
+        email="existing@example.com",
+        name="Existing Name",
+        hashed_password="hash",
+        is_active=True,
+        created_at=datetime.now(),
+        updated_at=datetime.now(),
+    )
+    user_service._repo.get_by_email = AsyncMock(return_value=mock_orm)
+    user_service._repo.update = AsyncMock()
+
+    user, tokens = await user_service.sync_oauth_user(
+        email="existing@example.com",
+        name="New Name",
+    )
+    assert user.id == "existing-123"
+    assert tokens.access_token
+    user_service._repo.update.assert_awaited_once()
+

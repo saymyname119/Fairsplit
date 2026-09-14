@@ -36,6 +36,11 @@ class IUserService(abc.ABC):
     @abc.abstractmethod
     async def get_user(self, user_id: str) -> User: ...
 
+    @abc.abstractmethod
+    async def sync_oauth_user(
+        self, email: str, name: str, avatar_url: str | None = None
+    ) -> tuple[User, AuthTokens]: ...
+
 
 class UserService(IUserService):
     """Implementation of User module business logic."""
@@ -97,6 +102,30 @@ class UserService(IUserService):
     async def get_user(self, user_id: str) -> User:
         orm_user = await self._repo.get_by_id_or_raise(user_id)
         return User.model_validate(orm_user)
+
+    async def sync_oauth_user(
+        self, email: str, name: str, avatar_url: str | None = None
+    ) -> tuple[User, AuthTokens]:
+        """Sync an OAuth authenticated user (Google / Supabase) into local user_accounts."""
+        user = await self._repo.get_by_email(email)
+        if not user:
+            import secrets
+
+            rand_pw = secrets.token_urlsafe(32)
+            hashed = bcrypt.hashpw(rand_pw.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+            orm_user = UserORM(
+                email=email,
+                name=name or email.split("@")[0],
+                hashed_password=hashed,
+            )
+            user = await self._repo.create(orm_user)
+        elif name and user.name != name:
+            # Update name if changed
+            user.name = name
+            await self._repo.update(user)
+
+        tokens = self._generate_tokens(user.id, user.email)
+        return User.model_validate(user), tokens
 
     def _generate_tokens(self, user_id: str, email: str) -> AuthTokens:
         now = datetime.now(UTC)

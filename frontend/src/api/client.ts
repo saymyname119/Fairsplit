@@ -86,7 +86,9 @@ export interface InvitationInfo {
 }
 
 // Live API and configuration state
-export const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
+export const API_BASE = (
+  import.meta.env.VITE_API_URL || 'https://fairsplit-api-mhgt.onrender.com'
+).replace(/\/$/, '');
 
 export class ApiClient {
   private token: string | null = localStorage.getItem('sw_token');
@@ -109,6 +111,21 @@ export class ApiClient {
     } catch {
       return false;
     }
+  }
+
+  async syncOAuthUser(email: string, name: string, avatarUrl?: string): Promise<User> {
+    const res = await fetch(`${API_BASE}/auth/oauth-sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, name, avatar_url: avatarUrl }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'OAuth synchronization failed' }));
+      throw new Error(err.detail || 'OAuth synchronization failed');
+    }
+    const data = await res.json();
+    this.setToken(data.tokens.access_token);
+    return data.user as User;
   }
 
   setToken(token: string) {

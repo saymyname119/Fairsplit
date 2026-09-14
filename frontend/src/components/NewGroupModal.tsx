@@ -1,33 +1,58 @@
 import React, { useState, useEffect } from 'react';
-import { X, Users, AlertCircle } from 'lucide-react';
+import { X, Users, AlertCircle, LogIn } from 'lucide-react';
+import type { User } from '../api/client';
 
 interface NewGroupModalProps {
   isOpen: boolean;
+  currentUser?: User | null;
+  onOpenAuth?: () => void;
   onClose: () => void;
-  onSubmit: (name: string, currency: string) => void;
+  onSubmit: (name: string, currency: string) => Promise<void> | void;
 }
 
-export const NewGroupModal: React.FC<NewGroupModalProps> = ({ isOpen, onClose, onSubmit }) => {
+export const NewGroupModal: React.FC<NewGroupModalProps> = ({
+  isOpen,
+  currentUser,
+  onOpenAuth,
+  onClose,
+  onSubmit,
+}) => {
   const [name, setName] = useState('');
   const [currency, setCurrency] = useState('USD');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setName('');
       setCurrency('USD');
       setErrorMsg(null);
+      setIsSubmitting(false);
     }
   }, [isOpen]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
       setErrorMsg('Please enter a group name.');
       return;
     }
-    onSubmit(name.trim(), currency);
-    onClose();
+    if (!currentUser) {
+      setErrorMsg('You must be signed in to create a group.');
+      if (onOpenAuth) onOpenAuth();
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMsg(null);
+    try {
+      await onSubmit(name.trim(), currency);
+      onClose();
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Failed to create group. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -48,6 +73,41 @@ export const NewGroupModal: React.FC<NewGroupModalProps> = ({ isOpen, onClose, o
             <X size={18} />
           </button>
         </div>
+
+        {/* Not logged in banner */}
+        {!currentUser && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+              backgroundColor: 'rgba(217, 119, 6, 0.1)',
+              border: '1px solid rgba(217, 119, 6, 0.3)',
+              padding: '12px 14px',
+              borderRadius: 'var(--radius-md)',
+              marginBottom: '20px',
+            }}
+          >
+            <div style={{ fontSize: '13px', color: '#b45309' }}>
+              <strong>Sign in required:</strong> You must be signed in to create and manage group ledgers.
+            </div>
+            {onOpenAuth && (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  onClose();
+                  onOpenAuth();
+                }}
+                style={{ height: '30px', padding: '0 12px', fontSize: '12px', whiteSpace: 'nowrap' }}
+              >
+                <LogIn size={13} />
+                <span>Sign In</span>
+              </button>
+            )}
+          </div>
+        )}
 
         {errorMsg && (
           <div
@@ -78,6 +138,7 @@ export const NewGroupModal: React.FC<NewGroupModalProps> = ({ isOpen, onClose, o
               placeholder="e.g. Iceland Roadtrip, Apartment 3B, Dinner Club"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              disabled={isSubmitting}
               autoFocus
             />
           </div>
@@ -88,6 +149,7 @@ export const NewGroupModal: React.FC<NewGroupModalProps> = ({ isOpen, onClose, o
               className="select-input font-mono"
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
+              disabled={isSubmitting}
             >
               <option value="USD">USD — United States Dollar ($)</option>
               <option value="EUR">EUR — Euro (€)</option>
@@ -98,12 +160,36 @@ export const NewGroupModal: React.FC<NewGroupModalProps> = ({ isOpen, onClose, o
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-            <button type="button" onClick={onClose} className="btn btn-secondary">
+            <button type="button" onClick={onClose} disabled={isSubmitting} className="btn btn-secondary">
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
-              <Users size={15} />
-              <span>Create Group</span>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={isSubmitting || !name.trim()}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+            >
+              {isSubmitting ? (
+                <>
+                  <span
+                    style={{
+                      width: '14px',
+                      height: '14px',
+                      border: '2px solid rgba(255,255,255,0.4)',
+                      borderTop: '2px solid #fff',
+                      borderRadius: '50%',
+                      animation: 'spin 0.8s linear infinite',
+                      display: 'inline-block',
+                    }}
+                  />
+                  <span>Creating...</span>
+                </>
+              ) : (
+                <>
+                  <Users size={15} />
+                  <span>Create Group</span>
+                </>
+              )}
             </button>
           </div>
         </form>

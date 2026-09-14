@@ -71,7 +71,7 @@ export const App: React.FC = () => {
       }
     };
     init();
-  }, []);
+  }, [currentUser]);
 
   // ── Supabase Auth State Listener ──────────────────────────────────────
   // Listens for Google OAuth redirects, session refresh, and sign-outs.
@@ -81,17 +81,24 @@ export const App: React.FC = () => {
       setSupabaseSession(session);
       if (session?.user) {
         const meta = session.user.user_metadata;
-        const userObj: User = {
-          id: session.user.id,
-          name: meta?.full_name || meta?.name || session.user.email?.split('@')[0] || 'User',
-          email: session.user.email || '',
-          avatar_url: meta?.avatar_url || meta?.picture,
-        };
-        setCurrentUser(userObj);
-        localStorage.setItem('sw_current_user', JSON.stringify(userObj));
-        if (session.access_token) {
-          api.setToken(session.access_token);
-        }
+        const name = meta?.full_name || meta?.name || session.user.email?.split('@')[0] || 'User';
+        const avatarUrl = meta?.avatar_url || meta?.picture;
+
+        api.syncOAuthUser(session.user.email || '', name, avatarUrl).then((syncedUser) => {
+          setCurrentUser(syncedUser);
+          localStorage.setItem('sw_current_user', JSON.stringify(syncedUser));
+          api.getGroups().then((fetched) => setGroups(fetched));
+        }).catch((err) => {
+          console.warn('OAuth sync with backend failed, using session user:', err);
+          const userObj: User = {
+            id: session.user.id,
+            name,
+            email: session.user.email || '',
+            avatar_url: avatarUrl,
+          };
+          setCurrentUser(userObj);
+          localStorage.setItem('sw_current_user', JSON.stringify(userObj));
+        });
       }
     });
 
@@ -100,17 +107,24 @@ export const App: React.FC = () => {
       setSupabaseSession(session);
       if (session && user) {
         const meta = user.user_metadata;
-        const userObj: User = {
-          id: user.id,
-          name: meta?.full_name || meta?.name || user.email?.split('@')[0] || 'User',
-          email: user.email || '',
-          avatar_url: meta?.avatar_url || meta?.picture,
-        };
-        setCurrentUser(userObj);
-        localStorage.setItem('sw_current_user', JSON.stringify(userObj));
-        if (session.access_token) {
-          api.setToken(session.access_token);
-        }
+        const name = meta?.full_name || meta?.name || user.email?.split('@')[0] || 'User';
+        const avatarUrl = meta?.avatar_url || meta?.picture;
+
+        api.syncOAuthUser(user.email || '', name, avatarUrl).then((syncedUser) => {
+          setCurrentUser(syncedUser);
+          localStorage.setItem('sw_current_user', JSON.stringify(syncedUser));
+          api.getGroups().then((fetched) => setGroups(fetched));
+        }).catch((err) => {
+          console.warn('OAuth sync with backend failed, using session user:', err);
+          const userObj: User = {
+            id: user.id,
+            name,
+            email: user.email || '',
+            avatar_url: avatarUrl,
+          };
+          setCurrentUser(userObj);
+          localStorage.setItem('sw_current_user', JSON.stringify(userObj));
+        });
       } else if (!session) {
         api.clearToken();
         localStorage.removeItem('sw_current_user');
@@ -152,6 +166,23 @@ export const App: React.FC = () => {
     setSimplifiedDebts(d);
   };
 
+  // Safe trigger handlers that gate on authentication
+  const handleOpenNewGroup = () => {
+    if (!currentUser || !api.hasToken()) {
+      setIsAuthModalOpen(true);
+    } else {
+      setIsGroupModalOpen(true);
+    }
+  };
+
+  const handleOpenNewExpense = () => {
+    if (!currentUser || !api.hasToken()) {
+      setIsAuthModalOpen(true);
+    } else {
+      setIsExpenseModalOpen(true);
+    }
+  };
+
   // Add Expense Handler
   const handleAddExpense = async (data: {
     description: string;
@@ -161,7 +192,13 @@ export const App: React.FC = () => {
     split_strategy: SplitStrategy;
     splits: SplitItem[];
   }) => {
-    if (!selectedGroupId) return;
+    if (!currentUser || !api.hasToken()) {
+      setIsAuthModalOpen(true);
+      throw new Error('Please sign in to record an expense.');
+    }
+    if (!selectedGroupId) {
+      throw new Error('Please select or create a group first.');
+    }
     const newExp = await api.createExpense({
       group_id: selectedGroupId,
       ...data,
@@ -172,13 +209,21 @@ export const App: React.FC = () => {
 
   // Create Group Handler
   const handleCreateGroup = async (name: string, currency: string) => {
-    const newGrp = await api.createGroup(name, currency, currentUser?.id || '');
+    if (!currentUser || !api.hasToken()) {
+      setIsAuthModalOpen(true);
+      throw new Error('Please sign in or create an account to create a shared ledger.');
+    }
+    const newGrp = await api.createGroup(name, currency, currentUser.id);
     setGroups([newGrp, ...groups]);
     setSelectedGroupId(newGrp.id);
   };
 
   // Record Settlement Handler
   const handleSettle = async (payerId: string, payeeId: string, amount: number) => {
+    if (!currentUser || !api.hasToken()) {
+      setIsAuthModalOpen(true);
+      return;
+    }
     if (!selectedGroupId || !currentGroup) return;
     await api.recordSettlement(selectedGroupId, payerId, payeeId, amount, currentGroup.currency);
     const updatedExpenses = await api.getExpenses(selectedGroupId);
@@ -188,6 +233,10 @@ export const App: React.FC = () => {
 
   // Delete Expense Handler
   const handleDeleteExpense = async (expenseId: string) => {
+    if (!currentUser || !api.hasToken()) {
+      setIsAuthModalOpen(true);
+      return;
+    }
     if (!selectedGroupId) return;
     await api.deleteExpense(expenseId, selectedGroupId);
     setExpenses(expenses.filter((e) => e.id !== expenseId));
@@ -196,6 +245,10 @@ export const App: React.FC = () => {
 
   // Update Expense Handler
   const handleUpdateExpense = async (expenseId: string, updates: Parameters<typeof api.updateExpense>[2]) => {
+    if (!currentUser || !api.hasToken()) {
+      setIsAuthModalOpen(true);
+      return;
+    }
     if (!selectedGroupId) return;
     const updated = await api.updateExpense(expenseId, selectedGroupId, updates);
     setExpenses(expenses.map((e) => (e.id === expenseId ? updated : e)));
@@ -205,6 +258,10 @@ export const App: React.FC = () => {
 
   // Add Member Handler
   const handleOpenAddMember = (groupId: string) => {
+    if (!currentUser || !api.hasToken()) {
+      setIsAuthModalOpen(true);
+      return;
+    }
     setAddMemberGroupId(groupId);
     setIsAddMemberModalOpen(true);
   };
@@ -219,6 +276,10 @@ export const App: React.FC = () => {
 
   // Remove Member Handler
   const handleRemoveMember = async (groupId: string, userId: string, userName: string) => {
+    if (!currentUser || !api.hasToken()) {
+      setIsAuthModalOpen(true);
+      return;
+    }
     const confirmed = window.confirm(`Remove ${userName} from this group?`);
     if (!confirmed) return;
     const success = await api.removeMember(groupId, userId);
@@ -242,8 +303,8 @@ export const App: React.FC = () => {
       <TopNav
         currentUser={currentUser}
         onOpenAuth={() => setIsAuthModalOpen(true)}
-        onOpenNewGroup={() => setIsGroupModalOpen(true)}
-        onOpenNewExpense={() => setIsExpenseModalOpen(true)}
+        onOpenNewGroup={handleOpenNewGroup}
+        onOpenNewExpense={handleOpenNewExpense}
       />
 
       {/* Hero Band with warm cream & metric cards */}
@@ -253,8 +314,8 @@ export const App: React.FC = () => {
         userNetBalance={userNetBalance}
         totalExpensesAmount={totalExpensesAmount}
         expensesCount={expenses.length}
-        onOpenExpenseModal={() => setIsExpenseModalOpen(true)}
-        onOpenGroupModal={() => setIsGroupModalOpen(true)}
+        onOpenExpenseModal={handleOpenNewExpense}
+        onOpenGroupModal={handleOpenNewGroup}
       />
 
       {/* Main Content Area */}
@@ -264,7 +325,7 @@ export const App: React.FC = () => {
           groups={groups}
           selectedGroupId={selectedGroupId}
           onSelectGroup={(id) => setSelectedGroupId(id)}
-          onOpenNewGroup={() => setIsGroupModalOpen(true)}
+          onOpenNewGroup={handleOpenNewGroup}
           onAddMember={handleOpenAddMember}
           onRemoveMember={handleRemoveMember}
         />
@@ -306,7 +367,7 @@ export const App: React.FC = () => {
                 <ExpensesList
                   expenses={expenses}
                   currency={currentGroup.currency}
-                  onOpenNewExpense={() => setIsExpenseModalOpen(true)}
+                  onOpenNewExpense={handleOpenNewExpense}
                   onSelectExpense={setSelectedExpense}
                 />
               </>
@@ -326,7 +387,7 @@ export const App: React.FC = () => {
               <ExpensesList
                 expenses={expenses}
                 currency={currentGroup.currency}
-                onOpenNewExpense={() => setIsExpenseModalOpen(true)}
+                onOpenNewExpense={handleOpenNewExpense}
                 onSelectExpense={setSelectedExpense}
               />
             )}
@@ -350,7 +411,7 @@ export const App: React.FC = () => {
             </p>
             <button
               className="btn btn-primary"
-              onClick={() => setIsGroupModalOpen(true)}
+              onClick={handleOpenNewGroup}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
             >
               + Create Ledger
@@ -360,7 +421,7 @@ export const App: React.FC = () => {
       </main>
 
       {/* Footer & Pre-footer Callout */}
-      <Footer onOpenNewExpense={() => setIsExpenseModalOpen(true)} />
+      <Footer onOpenNewExpense={handleOpenNewExpense} />
 
       {/* Modals */}
       {currentGroup && (
@@ -374,6 +435,8 @@ export const App: React.FC = () => {
 
       <NewGroupModal
         isOpen={isGroupModalOpen}
+        currentUser={currentUser}
+        onOpenAuth={() => setIsAuthModalOpen(true)}
         onClose={() => setIsGroupModalOpen(false)}
         onSubmit={handleCreateGroup}
       />
@@ -422,8 +485,10 @@ export const App: React.FC = () => {
           setCurrentUser(u);
           if (u) {
             localStorage.setItem('sw_current_user', JSON.stringify(u));
+            api.getGroups().then((fetched) => setGroups(fetched));
           } else {
             localStorage.removeItem('sw_current_user');
+            setGroups([]);
           }
         }}
         onSupabaseLogout={async () => {
@@ -432,6 +497,7 @@ export const App: React.FC = () => {
           api.clearToken();
           localStorage.removeItem('sw_current_user');
           setCurrentUser(null);
+          setGroups([]);
           setIsAuthModalOpen(false);
         }}
       />

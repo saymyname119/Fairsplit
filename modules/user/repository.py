@@ -39,3 +39,9 @@ class UserRepository:
         stmt = select(UserORM.id).where(UserORM.email == email).limit(1)
         result = await self._session.execute(stmt)
         return result.first() is not None
+
+    async def update(self, user: UserORM) -> UserORM:
+        self._session.add(user)
+        await self._session.flush()
+        return user
+
