@@ -1,8 +1,8 @@
 from datetime import datetime
 from unittest.mock import AsyncMock
 
+import bcrypt
 import pytest
-from passlib.hash import bcrypt
 
 from modules.user import (
     CreateUserRequest,
@@ -58,7 +58,7 @@ async def test_create_user_duplicate_email(user_service):
 @pytest.mark.asyncio
 async def test_authenticate_correct_password(user_service):
     request = LoginRequest(email="test@example.com", password="password123")
-    hashed = bcrypt.hash("password123")
+    hashed = bcrypt.hashpw(b"password123", bcrypt.gensalt()).decode("utf-8")
     mock_orm = UserORM(
         id="123", email="test@example.com", name="Test", hashed_password=hashed, is_active=True
     )
@@ -73,7 +73,7 @@ async def test_authenticate_correct_password(user_service):
 @pytest.mark.asyncio
 async def test_authenticate_wrong_password(user_service):
     request = LoginRequest(email="test@example.com", password="wrongpassword")
-    hashed = bcrypt.hash("password123")
+    hashed = bcrypt.hashpw(b"password123", bcrypt.gensalt()).decode("utf-8")
     mock_orm = UserORM(
         id="123", email="test@example.com", name="Test", hashed_password=hashed, is_active=True
     )

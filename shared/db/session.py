@@ -18,6 +18,7 @@ Why async?
 
 from __future__ import annotations
 
+import inspect
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -82,9 +83,6 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 
 
-import inspect
-
-
 @asynccontextmanager
 async def isolated_transaction(
     session: AsyncSession,
@@ -101,9 +99,17 @@ async def isolated_transaction(
         conn = await session.connection()
         await conn.execution_options(isolation_level=isolation_level)
     except Exception as e:
-        logger.debug("Could not set connection execution options for isolation_level %s: %s", isolation_level, e)
+        logger.debug(
+            "Could not set connection execution options for isolation_level %s: %s",
+            isolation_level,
+            e,
+        )
 
-    in_tx = session.in_transaction() if callable(getattr(session, "in_transaction", None)) else False
+    in_tx = (
+        session.in_transaction()
+        if callable(getattr(session, "in_transaction", None))
+        else False
+    )
     if inspect.iscoroutine(in_tx):
         in_tx = await in_tx
 

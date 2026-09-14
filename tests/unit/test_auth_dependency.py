@@ -27,7 +27,7 @@ def _make_token(
         "exp": exp,
         "type": token_type,
     }
-    return jwt.encode(payload, SECRET, algorithm=ALGORITHM)
+    return str(jwt.encode(payload, SECRET, algorithm=ALGORITHM))
 
 
 @pytest.mark.asyncio

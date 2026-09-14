@@ -17,7 +17,7 @@ from jose import jwt
 
 
 # ── Helper: Generate a valid JWT token for test requests ────────────────
-def _make_auth_header(user_id: str = "user-1", email: str = "test@example.com") -> dict:
+def _make_auth_header(user_id: str = "user-1", email: str = "test@example.com") -> dict[str, str]:
     payload = {
         "sub": user_id,
         "email": email,

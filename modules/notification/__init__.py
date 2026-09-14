@@ -1,5 +1,4 @@
-"""modules/notification/__init__.py"""
-
+from modules.notification.resend_client import ResendClient
 from modules.notification.service import (
     EmailNotifier,
     InAppNotifier,
@@ -11,5 +10,7 @@ __all__ = [
     "INotifier",
     "EmailNotifier",
     "InAppNotifier",
+    "ResendClient",
     "register_notification_handlers",
 ]
+

@@ -75,6 +75,27 @@ export interface ActivityEvent {
   latency_ms: number;
 }
 
+export interface Invitation {
+  id: string;
+  group_id: string;
+  group_name: string;
+  invited_by_id: string;
+  invited_by_name: string;
+  email: string;
+  status: 'pending' | 'accepted' | 'expired' | 'cancelled';
+  created_at: string;
+  expires_at: string;
+}
+
+export interface InvitationInfo {
+  id: string;
+  group_name: string;
+  invited_by_name: string;
+  email: string;
+  status: string;
+  is_expired: boolean;
+}
+
 // Initial sample seed data for warm first-impression demo
 export const SEED_USERS: User[] = [
   { id: 'usr_claude', name: 'Claude Vance', email: 'claude@anthropic.internal', phone: '+1 555-0101' },
@@ -150,6 +171,7 @@ class DemoStore {
   users: User[] = SEED_USERS;
   groups: Group[] = SEED_GROUPS;
   expenses: Expense[] = SEED_EXPENSES;
+  invitations: Invitation[] = [];
   events: ActivityEvent[] = [];
 
   constructor() {
@@ -165,9 +187,11 @@ class DemoStore {
       const savedUsers = localStorage.getItem('sw_users');
       const savedGroups = localStorage.getItem('sw_groups');
       const savedExpenses = localStorage.getItem('sw_expenses');
+      const savedInvitations = localStorage.getItem('sw_invitations');
       if (savedUsers) this.users = JSON.parse(savedUsers);
       if (savedGroups) this.groups = JSON.parse(savedGroups);
       if (savedExpenses) this.expenses = JSON.parse(savedExpenses);
+      if (savedInvitations) this.invitations = JSON.parse(savedInvitations);
     } catch {
       // ignore
     }
@@ -178,6 +202,7 @@ class DemoStore {
       localStorage.setItem('sw_users', JSON.stringify(this.users));
       localStorage.setItem('sw_groups', JSON.stringify(this.groups));
       localStorage.setItem('sw_expenses', JSON.stringify(this.expenses));
+      localStorage.setItem('sw_invitations', JSON.stringify(this.invitations));
     } catch {
       // ignore
     }
@@ -771,6 +796,154 @@ export class ApiClient {
       headers: this.token ? { Authorization: `Bearer ${this.token}` } : {},
     });
     demoStore.logEvent('DELETE', `/groups/${groupId}/members/${userId}`, res.status, 'Removed member', false, 15);
+    return res.ok || res.status === 204;
+  }
+
+  // ── Invitation API Methods ───────────────────────────────────────────
+
+  async sendInvitation(groupId: string, email: string): Promise<Invitation> {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (this.isDemoMode) {
+      const group = demoStore.groups.find((g) => g.id === groupId);
+      if (!group) throw new Error('Group not found');
+
+      if (group.members.some((m) => m.user?.email.toLowerCase() === normalizedEmail)) {
+        throw new Error(`${normalizedEmail} is already a member of this group.`);
+      }
+
+      const existingInvite = demoStore.invitations.find(
+        (i) => i.group_id === groupId && i.email.toLowerCase() === normalizedEmail && i.status === 'pending'
+      );
+      if (existingInvite) {
+        throw new Error(`A pending invitation already exists for ${normalizedEmail}.`);
+      }
+
+      const token = 'tok_' + Math.random().toString(36).substring(2, 10);
+      const inv: Invitation = {
+        id: 'inv_' + Math.random().toString(36).substring(2, 8),
+        group_id: groupId,
+        group_name: group.name,
+        invited_by_id: 'usr_claude',
+        invited_by_name: 'Claude Vance',
+        email: normalizedEmail,
+        status: 'pending',
+        created_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 86400000 * 7).toISOString(),
+      };
+
+      demoStore.invitations.unshift(inv);
+      demoStore.save();
+      demoStore.logEvent(
+        'POST',
+        `/groups/${groupId}/invitations`,
+        201,
+        `Sent Resend email invite to ${normalizedEmail} (token: ${token})`,
+        false,
+        28
+      );
+      return inv;
+    }
+
+    const res = await fetch(`${API_BASE}/groups/${groupId}/invitations`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
+      },
+      body: JSON.stringify({ email: normalizedEmail }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Failed to send invitation' }));
+      throw new Error(err.detail || 'Failed to send invitation');
+    }
+
+    demoStore.logEvent('POST', `/groups/${groupId}/invitations`, 201, `Dispatched Resend invite to ${normalizedEmail}`, false, 35);
+    return await res.json();
+  }
+
+  async getPendingInvitations(groupId: string): Promise<Invitation[]> {
+    if (this.isDemoMode) {
+      return demoStore.invitations.filter(
+        (i) => i.group_id === groupId && i.status === 'pending'
+      );
+    }
+
+    const res = await fetch(`${API_BASE}/groups/${groupId}/invitations`, {
+      headers: this.token ? { Authorization: `Bearer ${this.token}` } : {},
+    });
+    if (!res.ok) return [];
+    return await res.json();
+  }
+
+  async getInvitationInfo(token: string): Promise<InvitationInfo> {
+    if (this.isDemoMode) {
+      const inv = demoStore.invitations.find((i) => i.status === 'pending');
+      return {
+        id: inv?.id || 'inv_demo',
+        group_name: inv?.group_name || 'Kyoto Architecture Trip',
+        invited_by_name: inv?.invited_by_name || 'Claude Vance',
+        email: inv?.email || 'guest@example.com',
+        status: 'pending',
+        is_expired: false,
+      };
+    }
+
+    const res = await fetch(`${API_BASE}/invitations/info/${token}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Invitation not found or expired' }));
+      throw new Error(err.detail || 'Invitation not found');
+    }
+    return await res.json();
+  }
+
+  async acceptInvitation(token: string): Promise<{ group_id: string; user_id: string; group_name?: string; message?: string }> {
+    if (this.isDemoMode) {
+      const inv = demoStore.invitations.find((i) => i.status === 'pending');
+      if (inv) {
+        inv.status = 'accepted';
+        demoStore.save();
+      }
+      demoStore.logEvent('POST', '/invitations/accept', 200, 'Accepted invitation via token', false, 14);
+      return {
+        group_id: inv?.group_id || 'grp_kyoto',
+        user_id: 'usr_guest',
+        group_name: inv?.group_name || 'Kyoto Architecture Trip',
+        message: "You've successfully joined the group!",
+      };
+    }
+
+    const res = await fetch(`${API_BASE}/invitations/accept`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Failed to accept invitation' }));
+      throw new Error(err.detail || 'Failed to accept invitation');
+    }
+
+    return await res.json();
+  }
+
+  async cancelInvitation(invitationId: string): Promise<boolean> {
+    if (this.isDemoMode) {
+      const inv = demoStore.invitations.find((i) => i.id === invitationId);
+      if (inv) {
+        inv.status = 'cancelled';
+        demoStore.save();
+        demoStore.logEvent('DELETE', `/invitations/${invitationId}`, 204, 'Cancelled invitation', false, 6);
+        return true;
+      }
+      return false;
+    }
+
+    const res = await fetch(`${API_BASE}/invitations/${invitationId}`, {
+      method: 'DELETE',
+      headers: this.token ? { Authorization: `Bearer ${this.token}` } : {},
+    });
     return res.ok || res.status === 204;
   }
 }

@@ -21,6 +21,7 @@ import { ExpenseModal } from './components/ExpenseModal';
 import { ExpenseDetailModal } from './components/ExpenseDetailModal';
 import { NewGroupModal } from './components/NewGroupModal';
 import { AddMemberModal } from './components/AddMemberModal';
+import { AcceptInvitationModal } from './components/AcceptInvitationModal';
 import { AuthModal } from './components/AuthModal';
 import { Footer } from './components/Footer';
 
@@ -41,6 +42,16 @@ export const App: React.FC = () => {
   const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
   const [addMemberGroupId, setAddMemberGroupId] = useState<string>('');
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
+
+  // Check URL for invitation token (?token=xxx or /invite/accept?token=xxx)
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    if (token) {
+      setInviteToken(token);
+    }
+  }, []);
 
   // Supabase session state — tracks Google OAuth + any Supabase auth
   const [supabaseSession, setSupabaseSession] = useState<Session | null>(null);
@@ -363,9 +374,24 @@ export const App: React.FC = () => {
       {currentGroup && (
         <AddMemberModal
           isOpen={isAddMemberModalOpen}
-          groupName={groups.find((g) => g.id === addMemberGroupId)?.name || 'Group'}
+          groupId={addMemberGroupId || currentGroup.id}
+          groupName={groups.find((g) => g.id === addMemberGroupId)?.name || currentGroup.name}
           onClose={() => setIsAddMemberModalOpen(false)}
           onSubmit={handleAddMember}
+        />
+      )}
+
+      {inviteToken && (
+        <AcceptInvitationModal
+          token={inviteToken}
+          onClose={() => setInviteToken(null)}
+          onAccepted={async (groupId) => {
+            const refreshed = await api.getGroups();
+            setGroups(refreshed);
+            setSelectedGroupId(groupId);
+            setInviteToken(null);
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }}
         />
       )}
 

@@ -25,8 +25,12 @@ ENV/
 
 # Environment variables (NEVER commit)
 .env
-.env.local
-.env.*.local
+.env.*
+*.env
+*.env.*
+!.env.example
+!*.env.example
+!**/.env.example
 
 # Testing & coverage
 .pytest_cache/
@@ -67,4 +71,5 @@ yarn-error.log*
 frontend/dist/
 .turbo/
 .parcel-cache/
+uv.lock
 

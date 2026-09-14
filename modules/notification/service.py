@@ -1,9 +1,21 @@
-from __future__ import annotations
-
 import abc
+import asyncio
 import logging
 
-from shared.events import DomainEvent, ExpenseCreated, IEventBus, MemberAdded, SettlementRecorded
+from modules.notification.resend_client import (
+    ResendClient,
+    render_invitation_html,
+    render_invitation_text,
+)
+from shared.config import get_settings
+from shared.events import (
+    DomainEvent,
+    ExpenseCreated,
+    IEventBus,
+    InvitationCreated,
+    MemberAdded,
+    SettlementRecorded,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -18,15 +30,55 @@ class INotifier(abc.ABC):
 
 
 class EmailNotifier(INotifier):
+    def __init__(self, resend_client: ResendClient | None = None) -> None:
+        self._settings = get_settings()
+        self._resend = resend_client or ResendClient()
+
     @property
     def supported_event_types(self) -> list[str]:
-        return ["ExpenseCreated", "SettlementRecorded"]
+        return ["ExpenseCreated", "SettlementRecorded", "InvitationCreated"]
 
     def notify(self, event: DomainEvent) -> None:
         if isinstance(event, ExpenseCreated):
             self._send_expense_email(event)
         elif isinstance(event, SettlementRecorded):
             self._send_settlement_email(event)
+        elif isinstance(event, InvitationCreated):
+            self._send_invitation_email(event)
+
+    def _send_invitation_email(self, event: InvitationCreated) -> None:
+        invite_url = f"{self._settings.app_base_url}/invite/accept?token={event.token}"
+        subject = f"{event.invited_by_name} invited you to join \"{event.group_name}\" on Splitwise"
+        html = render_invitation_html(
+            group_name=event.group_name,
+            invited_by_name=event.invited_by_name,
+            invite_url=invite_url,
+        )
+        text = render_invitation_text(
+            group_name=event.group_name,
+            invited_by_name=event.invited_by_name,
+            invite_url=invite_url,
+        )
+
+        logger.info(
+            f"INVITATION EMAIL to {event.email} for group '{event.group_name}':\n"
+            f"Link: {invite_url}"
+        )
+
+        if self._resend.is_configured:
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(
+                    self._resend.send_email(
+                        to=event.email,
+                        subject=subject,
+                        html=html,
+                        text=text,
+                    )
+                )
+            except RuntimeError:
+                # In synchronous test or runner contexts without an active event loop
+                logger.debug("No active event loop for Resend; skipping task")
 
     def _send_expense_email(self, event: ExpenseCreated) -> None:
         for split in event.splits:
@@ -80,12 +132,12 @@ class InAppNotifier(INotifier):
 
 def register_notification_handlers(bus: IEventBus) -> None:
     email_notifier = EmailNotifier()
-    for event_type in email_notifier.supported_event_types:
-        bus.subscribe(f"expense.{event_type}", email_notifier.notify)
-        bus.subscribe(f"ledger.{event_type}", email_notifier.notify)
+    bus.subscribe("expense.ExpenseCreated", email_notifier.notify)
+    bus.subscribe("ledger.SettlementRecorded", email_notifier.notify)
+    bus.subscribe("invitation.InvitationCreated", email_notifier.notify)
 
     in_app_notifier = InAppNotifier()
-    for event_type in in_app_notifier.supported_event_types:
-        bus.subscribe(f"expense.{event_type}", in_app_notifier.notify)
-        bus.subscribe(f"ledger.{event_type}", in_app_notifier.notify)
-        bus.subscribe(f"group.{event_type}", in_app_notifier.notify)
+    bus.subscribe("expense.ExpenseCreated", in_app_notifier.notify)
+    bus.subscribe("ledger.SettlementRecorded", in_app_notifier.notify)
+    bus.subscribe("group.MemberAdded", in_app_notifier.notify)
+

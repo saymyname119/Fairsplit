@@ -7,6 +7,8 @@ from shared.events.event_types import (
     ExpenseDeleted,
     ExpenseSplitEvent,
     GroupCreated,
+    InvitationAccepted,
+    InvitationCreated,
     MemberAdded,
     SettlementRecorded,
     UserRegistered,
@@ -25,4 +27,7 @@ __all__ = [
     "ExpenseSplitEvent",
     "ExpenseDeleted",
     "SettlementRecorded",
+    "InvitationCreated",
+    "InvitationAccepted",
 ]
+

@@ -24,7 +24,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import ai, auth, expenses, groups, health, ledger, users
+from api.routes import ai, auth, expenses, groups, health, invitations, ledger, users
 from modules.notification import register_notification_handlers
 from shared.cache import balance_cache_key, close_redis, invalidate
 from shared.config import get_settings
@@ -138,6 +138,8 @@ def create_app() -> FastAPI:
     app.include_router(auth.router, prefix="/auth", tags=["Auth"])
     app.include_router(users.router, prefix="/users", tags=["Users"])
     app.include_router(groups.router, prefix="/groups", tags=["Groups"])
+    app.include_router(invitations.router, prefix="/groups", tags=["Invitations"])
+    app.include_router(invitations.router, prefix="/invitations", tags=["Invitations"])
     app.include_router(expenses.router, prefix="/groups", tags=["Expenses"])
     app.include_router(ledger.router, prefix="/groups", tags=["Ledger"])
     app.include_router(ai.router, prefix="/groups", tags=["AI"])

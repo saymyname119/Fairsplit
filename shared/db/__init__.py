@@ -20,7 +20,14 @@ __all__ = [
 
 
 def __getattr__(name: str) -> Any:
-    if name in {"engine", "AsyncSessionFactory", "get_db", "check_db_connection", "isolated_transaction"}:
+    lazy_exports = {
+        "engine",
+        "AsyncSessionFactory",
+        "get_db",
+        "check_db_connection",
+        "isolated_transaction",
+    }
+    if name in lazy_exports:
         from shared.db.session import (
             AsyncSessionFactory,
             check_db_connection,

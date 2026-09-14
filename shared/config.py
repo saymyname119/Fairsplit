@@ -50,6 +50,11 @@ class Settings(BaseSettings):
     # ── Cache ─────────────────────────────────────────────────
     balance_cache_ttl_seconds: int = Field(default=300)
 
+    # ── Email Delivery (Resend) ───────────────────────────────
+    resend_api_key: str = Field(default="")
+    resend_from_email: str = Field(default="Splitwise <onboarding@resend.dev>")
+    app_base_url: str = Field(default="http://localhost:5173")
+
     @property
     def is_production(self) -> bool:
         return self.environment == "production"

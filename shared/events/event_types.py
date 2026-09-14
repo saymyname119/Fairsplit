@@ -127,3 +127,32 @@ class SettlementRecorded(DomainEvent):
     from_user_id: str = ""
     to_user_id: str = ""
     amount: Decimal = Decimal("0")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Invitation module events
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class InvitationCreated(DomainEvent):
+    """Fired when a group admin sends an invitation to an email."""
+
+    event_type: str = "invitation.InvitationCreated"
+    invitation_id: str = ""
+    group_id: str = ""
+    group_name: str = ""
+    email: str = ""
+    token: str = ""
+    invited_by_name: str = ""
+
+
+@dataclass(frozen=True)
+class InvitationAccepted(DomainEvent):
+    """Fired when an invitee accepts their invitation."""
+
+    event_type: str = "invitation.InvitationAccepted"
+    invitation_id: str = ""
+    group_id: str = ""
+    user_id: str = ""
+    email: str = ""
