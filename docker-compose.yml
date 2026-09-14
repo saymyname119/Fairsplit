@@ -25,7 +25,7 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - splitwise-net
+      - fairsplit-net
 
   # ── Postgres 15 ──────────────────────────────────────────────────────────
   postgres:
@@ -45,7 +45,7 @@ services:
       timeout: 5s
       retries: 10
     networks:
-      - splitwise-net
+      - fairsplit-net
 
   # ── Redis 7 ──────────────────────────────────────────────────────────────
   # Not used in business logic yet (wired up in Prompt 3 for balance caching).
@@ -63,7 +63,7 @@ services:
       timeout: 3s
       retries: 10
     networks:
-      - splitwise-net
+      - fairsplit-net
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Volumes  (named volumes survive `docker-compose down`, removed with --volumes)
@@ -76,5 +76,5 @@ volumes:
 # Networks
 # ─────────────────────────────────────────────────────────────────────────────
 networks:
-  splitwise-net:
+  fairsplit-net:
     driver: bridge

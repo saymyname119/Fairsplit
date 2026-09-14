@@ -123,7 +123,7 @@ export const AcceptInvitationModal: React.FC<AcceptInvitationModalProps> = ({
             </h2>
 
             <p style={{ color: 'var(--color-text-secondary)', fontSize: '15px', lineHeight: 1.5, marginBottom: '24px' }}>
-              <strong>{info?.invited_by_name}</strong> has invited you to join this group on Splitwise to split and track shared expenses.
+              <strong>{info?.invited_by_name}</strong> has invited you to join this group on FairSplit to split and track shared expenses.
             </p>
 
             {acceptedMsg ? (

@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "splitwise-clone"
-version = "0.1.0"
-description = "A Splitwise-style expense splitting app — modular monolith, microservice-ready"
+name = "fairsplit"
+version = "0.2.0"
+description = "FairSplit — modern expense splitting and debt simplification platform, modular monolith, microservice-ready"
 requires-python = ">=3.11"
 
 dependencies = [

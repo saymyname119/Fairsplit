@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: splitwise-api
+    name: fairsplit-api
     runtime: python
     buildCommand: pip install -e .
     startCommand: uvicorn api.app:app --host 0.0.0.0 --port $PORT
@@ -15,7 +15,7 @@ services:
       - key: RESEND_API_KEY
         sync: false
       - key: RESEND_FROM_EMAIL
-        value: Splitwise <onboarding@resend.dev>
+        value: FairSplit <onboarding@resend.dev>
       - key: APP_BASE_URL
         sync: false
       - key: CORS_ORIGINS

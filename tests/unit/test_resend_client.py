@@ -52,7 +52,7 @@ async def test_send_email_unconfigured_returns_none():
 
 @pytest.mark.asyncio
 async def test_send_email_success():
-    client = ResendClient(api_key="re_test_key_123", from_email="Splitwise <onboarding@resend.dev>")
+    client = ResendClient(api_key="re_test_key_123", from_email="FairSplit <onboarding@resend.dev>")
 
     mock_resp = httpx.Response(
         200,

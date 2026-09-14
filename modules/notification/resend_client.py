@@ -125,7 +125,7 @@ def render_invitation_html(
               <div style="display: inline-block; width: 48px; height: 48px; border-radius: 14px; background: linear-gradient(135deg, #2c3e50 0%, #1a252f 100%); margin-bottom: 16px;">
                 <span style="font-size: 24px; line-height: 48px; color: #ffffff;">⚖️</span>
               </div>
-              <p style="margin: 0; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #86868b;">Splitwise Invitation</p>
+              <p style="margin: 0; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #86868b;">FairSplit Invitation</p>
               <h1 style="margin: 10px 0 0 0; font-size: 24px; font-weight: 700; letter-spacing: -0.5px; color: #1d1d1f; line-height: 1.25;">
                 Join {group_name}
               </h1>
@@ -189,9 +189,9 @@ def render_invitation_text(
     """Render plain text fallback for email clients."""
     return (
         f"Hi there,\n\n"
-        f"{invited_by_name} has invited you to join the group \"{group_name}\" on Splitwise.\n\n"
+        f"{invited_by_name} has invited you to join the group \"{group_name}\" on FairSplit.\n\n"
         f"Click the link below to accept the invitation and start tracking expenses together:\n"
         f"{invite_url}\n\n"
         f"This link will expire in 7 days.\n\n"
-        f"— Splitwise Team"
+        f"— FairSplit Team"
     )

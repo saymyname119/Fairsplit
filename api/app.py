@@ -72,7 +72,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         level=logging.DEBUG if not settings.is_production else logging.INFO,
         format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
     )
-    logger.info("Starting Splitwise Clone [%s]", settings.environment)
+    logger.info("Starting FairSplit [%s]", settings.environment)
 
     # Wire notification observers to the event bus
     bus = get_event_bus()
@@ -108,10 +108,10 @@ def create_app() -> FastAPI:
     isolated app instances for testing.
     """
     app = FastAPI(
-        title="Splitwise Clone",
+        title="FairSplit",
         description=(
-            "A Splitwise-style expense splitting app. "
-            "Modular monolith, microservice-ready. Built as a portfolio project."
+            "FairSplit — high-performance expense splitting and debt simplification platform. "
+            "Modular monolith, microservice-ready."
         ),
         version="0.2.0",
         lifespan=lifespan,

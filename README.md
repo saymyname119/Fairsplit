@@ -1,13 +1,13 @@
-# Splitwise Clone
+# FairSplit
 
-> **A portfolio-grade expense splitting application — modular monolith, microservice-ready.**  
-> Built with Python · FastAPI · PostgreSQL · Redis · Claude AI
+> **A portfolio-grade expense splitting and debt simplification application — modular monolith, microservice-ready.**  
+> Built with Python · FastAPI · PostgreSQL · Redis · Claude AI · React · TypeScript
 
 ---
 
 ## What Is This?
 
-A Splitwise-style app where groups of people can track shared expenses and calculate who owes whom. Built as a learning and portfolio project demonstrating:
+**FairSplit** is a modern expense sharing platform where groups can track shared expenses and simplify multi-party debts with greedy graph reduction algorithms. Built as a portfolio project demonstrating:
 
 - **Modular monolith architecture** — clean module boundaries, designed for microservice extraction
 - **Design patterns** — Strategy (split algorithms), Observer (notifications), Facade (module interfaces)

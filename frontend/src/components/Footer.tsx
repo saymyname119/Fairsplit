@@ -96,7 +96,7 @@ export const Footer: React.FC<FooterProps> = ({ onOpenNewExpense }) => {
                     fontWeight: 600,
                   }}
                 >
-                  Splitwise
+                  FairSplit
                 </span>
               </div>
               <p style={{ fontSize: '13px', lineHeight: 1.6, color: 'var(--color-on-dark-soft)' }}>

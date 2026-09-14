@@ -80,7 +80,7 @@ export const TopNav: React.FC<TopNavProps> = ({
                 color: 'var(--color-ink)',
               }}
             >
-              Splitwise
+              FairSplit
             </span>
             <span
               className="caption-uppercase"

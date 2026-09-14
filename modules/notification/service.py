@@ -48,7 +48,7 @@ class EmailNotifier(INotifier):
 
     def _send_invitation_email(self, event: InvitationCreated) -> None:
         invite_url = f"{self._settings.app_base_url}/invite/accept?token={event.token}"
-        subject = f"{event.invited_by_name} invited you to join \"{event.group_name}\" on Splitwise"
+        subject = f"{event.invited_by_name} invited you to join \"{event.group_name}\" on FairSplit"
         html = render_invitation_html(
             group_name=event.group_name,
             invited_by_name=event.invited_by_name,
@@ -90,7 +90,7 @@ class EmailNotifier(INotifier):
                 f"Hi {split.user_id},\n\n"
                 f'A new expense "{event.description}" was added to group {event.group_id}.\n'
                 f"You owe ${split.owed_amount:.2f}.\n\n"
-                "Thanks,\nSplitwise Clone Team"
+                "Thanks,\nFairSplit Team"
             )
             logger.info(f"EMAIL TO {split.user_id}:\n{email_body}")
 
@@ -99,7 +99,7 @@ class EmailNotifier(INotifier):
             f"Hi {event.to_user_id},\n\n"
             f"You received a payment of ${event.amount:.2f} from {event.from_user_id} "
             f"in group {event.group_id}.\n\n"
-            "Thanks,\nSplitwise Clone Team"
+            "Thanks,\nFairSplit Team"
         )
         logger.info(f"EMAIL TO {event.to_user_id}:\n{email_body}")
 

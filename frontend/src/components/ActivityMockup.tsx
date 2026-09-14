@@ -67,7 +67,7 @@ export const ActivityMockup: React.FC<ActivityMockupProps> = ({ events }) => {
                 marginLeft: '8px',
               }}
             >
-              splitwise-ledger.telemetry ~ asyncpg + redis
+              fairsplit-ledger.telemetry ~ asyncpg + redis
             </span>
           </div>
 
