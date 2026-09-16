@@ -1,12 +1,7 @@
 import abc
-import asyncio
 import logging
 
-from modules.notification.resend_client import (
-    ResendClient,
-    render_invitation_html,
-    render_invitation_text,
-)
+from modules.notification.resend_client import ResendClient
 from shared.config import get_settings
 from shared.events import (
     DomainEvent,
@@ -48,37 +43,10 @@ class EmailNotifier(INotifier):
 
     def _send_invitation_email(self, event: InvitationCreated) -> None:
         invite_url = f"{self._settings.app_base_url}/invite/accept?token={event.token}"
-        subject = f"{event.invited_by_name} invited you to join \"{event.group_name}\" on FairSplit"
-        html = render_invitation_html(
-            group_name=event.group_name,
-            invited_by_name=event.invited_by_name,
-            invite_url=invite_url,
-        )
-        text = render_invitation_text(
-            group_name=event.group_name,
-            invited_by_name=event.invited_by_name,
-            invite_url=invite_url,
-        )
-
         logger.info(
-            f"INVITATION EMAIL to {event.email} for group '{event.group_name}':\n"
-            f"Link: {invite_url}"
+            f"INVITATION NOTIFICATION: event for {event.email} "
+            f"(group '{event.group_name}'):\nLink: {invite_url}"
         )
-
-        if self._resend.is_configured:
-            try:
-                loop = asyncio.get_running_loop()
-                loop.create_task(
-                    self._resend.send_email(
-                        to=event.email,
-                        subject=subject,
-                        html=html,
-                        text=text,
-                    )
-                )
-            except RuntimeError:
-                # In synchronous test or runner contexts without an active event loop
-                logger.debug("No active event loop for Resend; skipping task")
 
     def _send_expense_email(self, event: ExpenseCreated) -> None:
         for split in event.splits:

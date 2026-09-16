@@ -102,6 +102,10 @@ class Invitation(BaseModel):
     invited_by_name: str
     email: str
     status: InvitationStatus
+    token: str = ""
+    invite_url: str = ""
+    email_dispatched: bool = False
+    delivery_status: str | None = None
     created_at: datetime
     expires_at: datetime
 

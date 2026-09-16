@@ -32,8 +32,14 @@ from modules.invitation.models import (
     InvitationStatus,
 )
 from modules.invitation.repository import InvitationRepository
+from modules.notification.resend_client import (
+    ResendClient,
+    render_invitation_html,
+    render_invitation_text,
+)
 from modules.user.models import UserORM
 from modules.user.repository import UserRepository
+from shared.config import get_settings
 from shared.errors import ConflictError, ForbiddenError, ValidationError
 from shared.events import get_event_bus
 
@@ -69,12 +75,18 @@ class IInvitationService(abc.ABC):
 class InvitationService(IInvitationService):
     """Implementation of the Invitation module business logic."""
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        resend_client: ResendClient | None = None,
+    ) -> None:
         self._session = session
         self._repo = InvitationRepository(session)
         self._group_repo = GroupRepository(session)
         self._user_repo = UserRepository(session)
         self._bus = get_event_bus()
+        self._settings = get_settings()
+        self._resend = resend_client or ResendClient()
 
     async def create_invitation(
         self, group_id: str, inviter_id: str, request: CreateInvitationRequest
@@ -128,7 +140,39 @@ class InvitationService(IInvitationService):
 
         invitation = self._map_to_domain(created)
 
-        # 6. Publish event for email notification
+        # 6. Attempt Resend dispatch directly for immediate status feedback
+        if self._resend.is_configured:
+            subject = (
+                f"{invitation.invited_by_name} invited you to join "
+                f"\"{invitation.group_name}\" on FairSplit"
+            )
+            html = render_invitation_html(
+                group_name=invitation.group_name,
+                invited_by_name=invitation.invited_by_name,
+                invite_url=invitation.invite_url,
+            )
+            text = render_invitation_text(
+                group_name=invitation.group_name,
+                invited_by_name=invitation.invited_by_name,
+                invite_url=invitation.invite_url,
+            )
+            res = await self._resend.send_email(
+                to=email,
+                subject=subject,
+                html=html,
+                text=text,
+            )
+            if res and res.get("id"):
+                invitation.email_dispatched = True
+                invitation.delivery_status = f"Dispatched via Resend (id={res.get('id')})"
+            else:
+                invitation.email_dispatched = False
+                invitation.delivery_status = self._resend.last_error or "Resend dispatch failed"
+        else:
+            invitation.email_dispatched = False
+            invitation.delivery_status = "Resend API key is not configured on the server."
+
+        # 7. Publish event for notification module (e.g. logging/in-app)
         from shared.events.event_types import InvitationCreated
 
         self._bus.publish(
@@ -144,7 +188,8 @@ class InvitationService(IInvitationService):
 
         logger.info(
             f"Invitation created: {email} → group '{group.name}' "
-            f"(token={token[:8]}…, expires={invitation.expires_at})"
+            f"(token={token[:8]}…, email_dispatched={invitation.email_dispatched}, "
+            f"delivery_status='{invitation.delivery_status}')"
         )
 
         return invitation
@@ -283,6 +328,7 @@ class InvitationService(IInvitationService):
 
     def _map_to_domain(self, orm: InvitationORM) -> Invitation:
         """Map ORM model to domain model."""
+        invite_url = f"{self._settings.app_base_url}/invite/accept?token={orm.token}"
         return Invitation(
             id=orm.id,
             group_id=orm.group_id,
@@ -293,6 +339,8 @@ class InvitationService(IInvitationService):
             ),
             email=orm.email,
             status=InvitationStatus(orm.status),
+            token=orm.token,
+            invite_url=invite_url,
             created_at=orm.created_at,
             expires_at=orm.expires_at,
         )

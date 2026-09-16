@@ -72,6 +72,10 @@ export interface Invitation {
   invited_by_name: string;
   email: string;
   status: 'pending' | 'accepted' | 'expired' | 'cancelled';
+  token?: string;
+  invite_url?: string;
+  email_dispatched?: boolean;
+  delivery_status?: string;
   created_at: string;
   expires_at: string;
 }

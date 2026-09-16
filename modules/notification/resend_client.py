@@ -34,6 +34,7 @@ class ResendClient:
         self.from_email = (
             from_email if from_email is not None else settings.resend_from_email
         )
+        self.last_error: str | None = None
 
     @property
     def is_configured(self) -> bool:
@@ -58,6 +59,8 @@ class ResendClient:
         recipients = [to] if isinstance(to, str) else to
 
         if not self.is_configured:
+            msg = "Resend API key is not configured on the server."
+            self.last_error = msg
             logger.info(
                 f"[Resend Offline/Unconfigured] Email not dispatched via API.\n"
                 f"To: {recipients}\nSubject: {subject}\n"
@@ -86,17 +89,26 @@ class ResendClient:
 
                 if response.status_code in (200, 201):
                     data: dict[str, Any] = response.json()
+                    self.last_error = None
                     logger.info(
                         f"Resend email dispatched successfully to {recipients}: id={data.get('id')}"
                     )
                     return data
 
                 error_detail = response.text
+                try:
+                    err_json = response.json()
+                    parsed_msg = err_json.get("message") or error_detail
+                except Exception:
+                    parsed_msg = error_detail
+
+                self.last_error = parsed_msg
                 logger.error(
                     f"Resend API error {response.status_code} sending to {recipients}: {error_detail}"
                 )
                 return None
         except Exception as exc:
+            self.last_error = str(exc)
             logger.error(f"Failed to communicate with Resend API: {exc}")
             return None
 

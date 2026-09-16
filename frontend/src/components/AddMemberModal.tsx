@@ -1,5 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { X, UserPlus, AlertCircle, Mail, User as UserIcon, Send, Clock, Trash2, CheckCircle2, Sparkles } from 'lucide-react';
+import {
+  X,
+  UserPlus,
+  AlertCircle,
+  Mail,
+  User as UserIcon,
+  Send,
+  Clock,
+  Trash2,
+  CheckCircle2,
+  Sparkles,
+  Copy,
+  Check,
+  AlertTriangle,
+} from 'lucide-react';
 import { api, type Invitation } from '../api/client';
 
 interface AddMemberModalProps {
@@ -22,6 +36,9 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
   const [email, setEmail] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [sandboxNotice, setSandboxNotice] = useState<string | null>(null);
+  const [recentInvite, setRecentInvite] = useState<Invitation | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pendingInvites, setPendingInvites] = useState<Invitation[]>([]);
 
@@ -35,12 +52,25 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
     }
   };
 
+  const copyToClipboard = async (text: string, id: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2500);
+    } catch {
+      // Fallback if browser permission is denied
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
       setName('');
       setEmail('');
       setErrorMsg(null);
       setSuccessMsg(null);
+      setSandboxNotice(null);
+      setRecentInvite(null);
+      setCopiedId(null);
       setIsSubmitting(false);
       fetchPending();
     }
@@ -50,6 +80,7 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
+    setSandboxNotice(null);
 
     if (!email.trim() || !email.includes('@')) {
       setErrorMsg('Please enter a valid email address.');
@@ -59,7 +90,15 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
     setIsSubmitting(true);
     try {
       const inv = await api.sendInvitation(groupId, email.trim().toLowerCase());
-      setSuccessMsg(`Invitation email dispatched via Resend to ${inv.email}!`);
+      setRecentInvite(inv);
+      if (inv.email_dispatched) {
+        setSuccessMsg(`Invitation email dispatched via Resend to ${inv.email}!`);
+      } else {
+        const notice =
+          inv.delivery_status ||
+          'Resend Sandbox Notice: Deliveries to unverified domains are restricted. Use the direct invite link below.';
+        setSandboxNotice(notice);
+      }
       setEmail('');
       await fetchPending();
     } catch (err: any) {
@@ -229,6 +268,34 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
           </div>
         )}
 
+        {/* Sandbox Notice Banner */}
+        {sandboxNotice && (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px',
+              backgroundColor: 'rgba(255, 149, 0, 0.1)',
+              border: '1px solid rgba(255, 149, 0, 0.3)',
+              color: '#d97706',
+              padding: '12px 14px',
+              borderRadius: 'var(--radius-md)',
+              fontSize: '13px',
+              marginBottom: '18px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
+              <AlertTriangle size={16} />
+              <span>Resend Testing Sandbox Active</span>
+            </div>
+            <p style={{ margin: 0, fontSize: '12px', lineHeight: 1.45, color: 'var(--color-text-secondary)' }}>
+              {sandboxNotice.includes('tanaysinghyt119@gmail.com')
+                ? 'Resend testing tier only delivers outbound emails to tanaysinghyt119@gmail.com until a custom domain is verified at resend.com/domains. You can share the instant direct invite link below!'
+                : sandboxNotice}
+            </p>
+          </div>
+        )}
+
         {/* Error Banner */}
         {errorMsg && (
           <div
@@ -290,7 +357,7 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
                 />
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginBottom: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginBottom: recentInvite ? '16px' : '24px' }}>
                 <button
                   type="button"
                   onClick={onClose}
@@ -310,6 +377,86 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
                 </button>
               </div>
             </form>
+
+            {/* Direct Link Card for Recent Invite */}
+            {recentInvite && (
+              <div
+                style={{
+                  background: 'var(--color-surface-subtle, rgba(0,0,0,0.03))',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-md, 12px)',
+                  padding: '14px',
+                  marginBottom: '20px',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
+                    Direct Invite Link
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      padding: '2px 8px',
+                      borderRadius: '999px',
+                      backgroundColor: recentInvite.email_dispatched ? 'rgba(52, 199, 89, 0.15)' : 'rgba(255, 149, 0, 0.15)',
+                      color: recentInvite.email_dispatched ? '#34c759' : '#d97706',
+                    }}
+                  >
+                    {recentInvite.email_dispatched ? '✓ Emailed & Ready' : '📋 Link Ready'}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <input
+                    type="text"
+                    readOnly
+                    value={
+                      recentInvite.invite_url ||
+                      `${window.location.origin}/invite/accept?token=${recentInvite.token || ''}`
+                    }
+                    style={{
+                      flex: 1,
+                      fontSize: '12px',
+                      padding: '8px 10px',
+                      borderRadius: '8px',
+                      border: '1px solid var(--color-border)',
+                      background: 'var(--color-surface, #fff)',
+                      color: 'var(--color-text)',
+                      outline: 'none',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const link =
+                        recentInvite.invite_url ||
+                        `${window.location.origin}/invite/accept?token=${recentInvite.token || ''}`;
+                      copyToClipboard(link, 'recent');
+                    }}
+                    className="btn btn-secondary"
+                    style={{
+                      padding: '8px 14px',
+                      fontSize: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      whiteSpace: 'nowrap',
+                      backgroundColor: copiedId === 'recent' ? '#34c759' : undefined,
+                      color: copiedId === 'recent' ? '#fff' : undefined,
+                      borderColor: copiedId === 'recent' ? '#34c759' : undefined,
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    {copiedId === 'recent' ? <Check size={14} /> : <Copy size={14} />}
+                    <span>{copiedId === 'recent' ? 'Copied!' : 'Copy Link'}</span>
+                  </button>
+                </div>
+                <p style={{ margin: '8px 0 0 0', fontSize: '11px', color: 'var(--color-text-secondary)', lineHeight: 1.4 }}>
+                  Anyone with this link can join <strong>{groupName}</strong> without waiting for an email.
+                </p>
+              </div>
+            )}
 
             {/* Pending Invitations Section */}
             {pendingInvites.length > 0 && (
@@ -342,16 +489,37 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
                           Sent {new Date(inv.created_at).toLocaleDateString()}
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleCancelInvite(inv.id)}
-                        className="btn-icon-circular"
-                        style={{ width: '28px', height: '28px', color: 'var(--color-error)' }}
-                        title="Revoke invitation"
-                        aria-label="Revoke invitation"
-                      >
-                        <Trash2 size={13} />
-                      </button>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const link =
+                              inv.invite_url ||
+                              `${window.location.origin}/invite/accept?token=${inv.token || ''}`;
+                            copyToClipboard(link, inv.id);
+                          }}
+                          className="btn-icon-circular"
+                          style={{
+                            width: '28px',
+                            height: '28px',
+                            color: copiedId === inv.id ? '#34c759' : 'var(--color-text-secondary)',
+                          }}
+                          title="Copy invitation link"
+                          aria-label="Copy invitation link"
+                        >
+                          {copiedId === inv.id ? <Check size={13} /> : <Copy size={13} />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleCancelInvite(inv.id)}
+                          className="btn-icon-circular"
+                          style={{ width: '28px', height: '28px', color: 'var(--color-error)' }}
+                          title="Revoke invitation"
+                          aria-label="Revoke invitation"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
