@@ -50,10 +50,17 @@ class Settings(BaseSettings):
     # ── Cache ─────────────────────────────────────────────────
     balance_cache_ttl_seconds: int = Field(default=300)
 
-    # ── Email Delivery (Resend) ───────────────────────────────
+    # ── Email Delivery (Resend & SMTP) ─────────────────────────
     resend_api_key: str = Field(default="")
     resend_from_email: str = Field(default="FairSplit <onboarding@resend.dev>")
     app_base_url: str = Field(default="http://localhost:5173")
+
+    # ── SMTP (Free Gmail / Custom SMTP) ───────────────────────
+    smtp_host: str = Field(default="smtp.gmail.com")
+    smtp_port: int = Field(default=465)
+    smtp_user: str = Field(default="")
+    smtp_password: str = Field(default="")
+    smtp_from_email: str = Field(default="")
 
     # ── CORS ──────────────────────────────────────────────────
     cors_origins: str = Field(default="")

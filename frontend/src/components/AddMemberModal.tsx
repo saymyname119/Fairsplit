@@ -16,6 +16,21 @@ import {
 } from 'lucide-react';
 import { api, type Invitation } from '../api/client';
 
+const WhatsAppIcon: React.FC<{ size?: number; color?: string }> = ({
+  size = 15,
+  color = 'currentColor',
+}) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill={color}
+    style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}
+  >
+    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.746.953 3.71 1.456 5.711 1.457h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
+  </svg>
+);
+
 interface AddMemberModalProps {
   isOpen: boolean;
   groupId: string;
@@ -50,6 +65,33 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
     } catch {
       // ignore
     }
+  };
+
+  const getInviteUrl = (inv: Invitation) => {
+    return (
+      inv.invite_url ||
+      `${window.location.origin}/invite/accept?token=${inv.token || ''}`
+    );
+  };
+
+  const getWhatsAppMessage = (url: string) => {
+    return `Hey! Join our group "${groupName}" on FairSplit to split expenses effortlessly: ${url}`;
+  };
+
+  const shareOnWhatsApp = (url: string) => {
+    const msg = getWhatsAppMessage(url);
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`, '_blank');
+  };
+
+  const copyWhatsAppMessage = async (url: string, id: string) => {
+    const msg = getWhatsAppMessage(url);
+    await copyToClipboard(msg, id);
+  };
+
+  const openInMailApp = (emailTo: string, url: string) => {
+    const subject = `Join "${groupName}" on FairSplit`;
+    const body = `Hi,\n\nI've invited you to join "${groupName}" on FairSplit so we can easily track and split expenses.\n\nClick here to accept and join:\n${url}\n\nSee you there!`;
+    window.location.href = `mailto:${encodeURIComponent(emailTo)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
 
   const copyToClipboard = async (text: string, id: string) => {
@@ -219,7 +261,7 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
             }}
           >
             <Send size={14} />
-            <span>Email Invite (Resend)</span>
+            <span>Invite (Email & WhatsApp)</span>
           </button>
           <button
             type="button"
@@ -389,9 +431,24 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
                   marginBottom: '20px',
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
-                    Direct Invite Link
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '8px',
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      color: 'var(--color-text-secondary)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.6px',
+                    }}
+                  >
+                    Direct Invitation
                   </span>
                   <span
                     style={{
@@ -399,7 +456,9 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
                       fontWeight: 600,
                       padding: '2px 8px',
                       borderRadius: '999px',
-                      backgroundColor: recentInvite.email_dispatched ? 'rgba(52, 199, 89, 0.15)' : 'rgba(255, 149, 0, 0.15)',
+                      backgroundColor: recentInvite.email_dispatched
+                        ? 'rgba(52, 199, 89, 0.15)'
+                        : 'rgba(255, 149, 0, 0.15)',
                       color: recentInvite.email_dispatched ? '#34c759' : '#d97706',
                     }}
                   >
@@ -407,14 +466,11 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
                   </span>
                 </div>
 
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '10px' }}>
                   <input
                     type="text"
                     readOnly
-                    value={
-                      recentInvite.invite_url ||
-                      `${window.location.origin}/invite/accept?token=${recentInvite.token || ''}`
-                    }
+                    value={getInviteUrl(recentInvite)}
                     style={{
                       flex: 1,
                       fontSize: '12px',
@@ -428,12 +484,7 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
                   />
                   <button
                     type="button"
-                    onClick={() => {
-                      const link =
-                        recentInvite.invite_url ||
-                        `${window.location.origin}/invite/accept?token=${recentInvite.token || ''}`;
-                      copyToClipboard(link, 'recent');
-                    }}
+                    onClick={() => copyToClipboard(getInviteUrl(recentInvite), 'recent')}
                     className="btn btn-secondary"
                     style={{
                       padding: '8px 14px',
@@ -452,8 +503,82 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
                     <span>{copiedId === 'recent' ? 'Copied!' : 'Copy Link'}</span>
                   </button>
                 </div>
-                <p style={{ margin: '8px 0 0 0', fontSize: '11px', color: 'var(--color-text-secondary)', lineHeight: 1.4 }}>
-                  Anyone with this link can join <strong>{groupName}</strong> without waiting for an email.
+
+                {/* Instant Action Buttons: WhatsApp & Mail */}
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => shareOnWhatsApp(getInviteUrl(recentInvite))}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '7px 14px',
+                      backgroundColor: '#25D366',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      fontWeight: 600,
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                      transition: 'transform 0.1s ease',
+                    }}
+                    title="Send via WhatsApp"
+                  >
+                    <WhatsAppIcon size={14} color="#ffffff" />
+                    <span>Share on WhatsApp</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      copyWhatsAppMessage(getInviteUrl(recentInvite), 'wa-recent')
+                    }
+                    className="btn btn-secondary"
+                    style={{
+                      padding: '7px 12px',
+                      fontSize: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      backgroundColor: copiedId === 'wa-recent' ? '#34c759' : undefined,
+                      color: copiedId === 'wa-recent' ? '#fff' : undefined,
+                      borderColor: copiedId === 'wa-recent' ? '#34c759' : undefined,
+                    }}
+                  >
+                    {copiedId === 'wa-recent' ? <Check size={14} /> : <Copy size={14} />}
+                    <span>{copiedId === 'wa-recent' ? 'Message Copied!' : 'Copy for WhatsApp'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      openInMailApp(recentInvite.email, getInviteUrl(recentInvite))
+                    }
+                    className="btn btn-secondary"
+                    style={{
+                      padding: '7px 12px',
+                      fontSize: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                    title="Open your email app with pre-filled message"
+                  >
+                    <Mail size={13} />
+                    <span>Send via Mail App</span>
+                  </button>
+                </div>
+
+                <p
+                  style={{
+                    margin: '10px 0 0 0',
+                    fontSize: '11px',
+                    color: 'var(--color-text-secondary)',
+                    lineHeight: 1.4,
+                  }}
+                >
+                  Friends can tap this link to join <strong>{groupName}</strong> directly from their phone or laptop.
                 </p>
               </div>
             )}
@@ -492,11 +617,22 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <button
                           type="button"
+                          onClick={() => shareOnWhatsApp(getInviteUrl(inv))}
+                          className="btn-icon-circular"
+                          style={{
+                            width: '28px',
+                            height: '28px',
+                            color: '#25D366',
+                          }}
+                          title="Share on WhatsApp"
+                          aria-label="Share on WhatsApp"
+                        >
+                          <WhatsAppIcon size={14} color="#25D366" />
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => {
-                            const link =
-                              inv.invite_url ||
-                              `${window.location.origin}/invite/accept?token=${inv.token || ''}`;
-                            copyToClipboard(link, inv.id);
+                            copyToClipboard(getInviteUrl(inv), inv.id);
                           }}
                           className="btn-icon-circular"
                           style={{

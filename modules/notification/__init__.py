@@ -5,12 +5,14 @@ from modules.notification.service import (
     INotifier,
     register_notification_handlers,
 )
+from modules.notification.smtp_client import SmtpClient
 
 __all__ = [
     "INotifier",
     "EmailNotifier",
     "InAppNotifier",
     "ResendClient",
+    "SmtpClient",
     "register_notification_handlers",
 ]
 

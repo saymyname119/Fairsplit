@@ -37,6 +37,7 @@ from modules.notification.resend_client import (
     render_invitation_html,
     render_invitation_text,
 )
+from modules.notification.smtp_client import SmtpClient
 from modules.user.models import UserORM
 from modules.user.repository import UserRepository
 from shared.config import get_settings
@@ -79,6 +80,7 @@ class InvitationService(IInvitationService):
         self,
         session: AsyncSession,
         resend_client: ResendClient | None = None,
+        smtp_client: SmtpClient | None = None,
     ) -> None:
         self._session = session
         self._repo = InvitationRepository(session)
@@ -87,6 +89,7 @@ class InvitationService(IInvitationService):
         self._bus = get_event_bus()
         self._settings = get_settings()
         self._resend = resend_client or ResendClient()
+        self._smtp = smtp_client or SmtpClient()
 
     async def create_invitation(
         self, group_id: str, inviter_id: str, request: CreateInvitationRequest
@@ -140,22 +143,38 @@ class InvitationService(IInvitationService):
 
         invitation = self._map_to_domain(created)
 
-        # 6. Attempt Resend dispatch directly for immediate status feedback
-        if self._resend.is_configured:
-            subject = (
-                f"{invitation.invited_by_name} invited you to join "
-                f"\"{invitation.group_name}\" on FairSplit"
+        # 6. Attempt email dispatch (SMTP/Gmail first if configured, else Resend)
+        subject = (
+            f"{invitation.invited_by_name} invited you to join "
+            f"\"{invitation.group_name}\" on FairSplit"
+        )
+        html = render_invitation_html(
+            group_name=invitation.group_name,
+            invited_by_name=invitation.invited_by_name,
+            invite_url=invitation.invite_url,
+        )
+        text = render_invitation_text(
+            group_name=invitation.group_name,
+            invited_by_name=invitation.invited_by_name,
+            invite_url=invitation.invite_url,
+        )
+
+        if self._smtp.is_configured:
+            smtp_success = await self._smtp.send_email(
+                to=email,
+                subject=subject,
+                html=html,
+                text=text,
             )
-            html = render_invitation_html(
-                group_name=invitation.group_name,
-                invited_by_name=invitation.invited_by_name,
-                invite_url=invitation.invite_url,
-            )
-            text = render_invitation_text(
-                group_name=invitation.group_name,
-                invited_by_name=invitation.invited_by_name,
-                invite_url=invitation.invite_url,
-            )
+            if smtp_success:
+                invitation.email_dispatched = True
+                invitation.delivery_status = f"Dispatched via SMTP to {email}"
+            else:
+                invitation.email_dispatched = False
+                invitation.delivery_status = (
+                    self._smtp.last_error or "SMTP dispatch failed"
+                )
+        elif self._resend.is_configured:
             res = await self._resend.send_email(
                 to=email,
                 subject=subject,
@@ -170,7 +189,9 @@ class InvitationService(IInvitationService):
                 invitation.delivery_status = self._resend.last_error or "Resend dispatch failed"
         else:
             invitation.email_dispatched = False
-            invitation.delivery_status = "Resend API key is not configured on the server."
+            invitation.delivery_status = (
+                "No email provider (SMTP/Resend) configured on server."
+            )
 
         # 7. Publish event for notification module (e.g. logging/in-app)
         from shared.events.event_types import InvitationCreated
