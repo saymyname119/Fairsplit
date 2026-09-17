@@ -482,7 +482,15 @@ export class ApiClient {
     return await res.json();
   }
 
-  async acceptInvitation(token: string): Promise<{ group_id: string; user_id: string; group_name?: string; message?: string }> {
+  async acceptInvitation(token: string): Promise<{
+    group_id: string;
+    user_id: string;
+    group_name?: string;
+    message?: string;
+    access_token?: string;
+    refresh_token?: string;
+    user?: { id: string; name: string; email: string };
+  }> {
     const res = await fetch(`${API_BASE}/invitations/accept`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -19,6 +19,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import bcrypt
+from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from modules.group.models import GroupMemberORM, MemberRole
@@ -257,6 +258,15 @@ class InvitationService(IInvitationService):
             user = await self._user_repo.create(user)
             logger.info(f"Auto-created user account for invited email: {email}")
 
+        user_email = str(getattr(user, "email", None) or email)
+        user_name = str(getattr(user, "name", None) or user_email.split("@")[0])
+        group_name = (
+            invitation.group.name
+            if hasattr(invitation, "group") and invitation.group
+            else getattr(invitation, "group_name", "the group")
+        )
+        tokens = self._generate_tokens(user.id, user_email)
+
         # Check if already a member (edge case: accepted invite link twice)
         is_member = await self._group_repo.is_member(
             invitation.group_id, user.id
@@ -266,7 +276,17 @@ class InvitationService(IInvitationService):
             return {
                 "group_id": invitation.group_id,
                 "user_id": user.id,
+                "group_name": group_name,
                 "message": "You are already a member of this group",
+                "access_token": tokens["access_token"],
+                "refresh_token": tokens["refresh_token"],
+                "token_type": tokens["token_type"],
+                "expires_in": tokens["expires_in"],
+                "user": {
+                    "id": user.id,
+                    "email": user_email,
+                    "name": user_name,
+                },
             }
 
         # Add user to the group
@@ -292,14 +312,58 @@ class InvitationService(IInvitationService):
         )
 
         logger.info(
-            f"Invitation accepted: {email} joined group '{invitation.group.name}'"
+            f"Invitation accepted: {email} joined group '{group_name}'"
         )
 
         return {
             "group_id": invitation.group_id,
             "user_id": user.id,
-            "group_name": invitation.group.name,
-            "message": f"Welcome! You've joined {invitation.group.name}",
+            "group_name": group_name,
+            "message": f"Welcome! You've joined {group_name}",
+            "access_token": tokens["access_token"],
+            "refresh_token": tokens["refresh_token"],
+            "token_type": tokens["token_type"],
+            "expires_in": tokens["expires_in"],
+            "user": {
+                "id": user.id,
+                "email": user_email,
+                "name": user_name,
+            },
+        }
+
+    def _generate_tokens(self, user_id: str, email: str) -> dict[str, Any]:
+        now = datetime.now(UTC)
+        access_exp = now + timedelta(minutes=self._settings.jwt_expiry_minutes)
+        access_payload = {
+            "sub": user_id,
+            "email": email,
+            "exp": access_exp,
+            "type": "access",
+        }
+        access_token = jwt.encode(
+            access_payload,
+            self._settings.jwt_secret,
+            algorithm=self._settings.jwt_algorithm,
+        )
+
+        refresh_exp = now + timedelta(days=7)
+        refresh_payload = {
+            "sub": user_id,
+            "email": email,
+            "exp": refresh_exp,
+            "type": "refresh",
+        }
+        refresh_token = jwt.encode(
+            refresh_payload,
+            self._settings.jwt_secret,
+            algorithm=self._settings.jwt_algorithm,
+        )
+
+        return {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "expires_in": self._settings.jwt_expiry_minutes * 60,
         }
 
     async def get_invitation_info(self, token: str) -> InvitationInfo:

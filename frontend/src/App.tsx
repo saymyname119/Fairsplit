@@ -455,7 +455,10 @@ export const App: React.FC = () => {
         <AcceptInvitationModal
           token={inviteToken}
           onClose={() => setInviteToken(null)}
-          onAccepted={async (groupId) => {
+          onAccepted={async (groupId, joinedUser) => {
+            if (joinedUser) {
+              setCurrentUser(joinedUser);
+            }
             const refreshed = await api.getGroups();
             setGroups(refreshed);
             setSelectedGroupId(groupId);

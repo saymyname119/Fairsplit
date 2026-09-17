@@ -134,11 +134,13 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
       const inv = await api.sendInvitation(groupId, email.trim().toLowerCase());
       setRecentInvite(inv);
       if (inv.email_dispatched) {
-        setSuccessMsg(`Invitation email dispatched via Resend to ${inv.email}!`);
+        setSuccessMsg(
+          inv.delivery_status || `Invitation email dispatched to ${inv.email}!`
+        );
       } else {
         const notice =
           inv.delivery_status ||
-          'Resend Sandbox Notice: Deliveries to unverified domains are restricted. Use the direct invite link below.';
+          'Email not dispatched. You can share the direct invite link or send via WhatsApp below.';
         setSandboxNotice(notice);
       }
       setEmail('');

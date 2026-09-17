@@ -5,7 +5,7 @@ import { api, type InvitationInfo } from '../api/client';
 interface AcceptInvitationModalProps {
   token: string;
   onClose: () => void;
-  onAccepted: (groupId: string) => void;
+  onAccepted: (groupId: string, joinedUser?: { id: string; name: string; email: string }) => void;
 }
 
 export const AcceptInvitationModal: React.FC<AcceptInvitationModalProps> = ({
@@ -45,9 +45,18 @@ export const AcceptInvitationModal: React.FC<AcceptInvitationModalProps> = ({
     setErrorMsg(null);
     try {
       const res = await api.acceptInvitation(token);
+      if (res.access_token) {
+        api.setToken(res.access_token);
+        if (res.refresh_token) {
+          localStorage.setItem('sw_refresh_token', res.refresh_token);
+        }
+        if (res.user) {
+          localStorage.setItem('sw_current_user', JSON.stringify(res.user));
+        }
+      }
       setAcceptedMsg(res.message || "You've joined the group!");
       setTimeout(() => {
-        onAccepted(res.group_id);
+        onAccepted(res.group_id, res.user);
         onClose();
       }, 1200);
     } catch (err: any) {

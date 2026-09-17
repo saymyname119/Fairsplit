@@ -145,7 +145,9 @@ async def test_accept_invitation_happy_path(invitation_service):
     invitation_service._repo.get_by_token_or_raise = AsyncMock(return_value=inv)
     invitation_service._user_repo.get_by_email = AsyncMock(return_value=None)
 
-    new_user = MagicMock(spec=UserORM, id="new-user-id")
+    new_user = MagicMock(
+        spec=UserORM, id="new-user-id", email="invitee@example.com", name="invitee"
+    )
     invitation_service._user_repo.create = AsyncMock(return_value=new_user)
     invitation_service._group_repo.is_member = AsyncMock(return_value=False)
     invitation_service._group_repo.add_member = AsyncMock()
@@ -156,6 +158,9 @@ async def test_accept_invitation_happy_path(invitation_service):
 
     assert result["group_id"] == "g1"
     assert result["user_id"] == "new-user-id"
+    assert "access_token" in result
+    assert "refresh_token" in result
+    assert result["user"]["email"] == "invitee@example.com"
     invitation_service._repo.mark_status.assert_called_once_with(
         "inv1", InvitationStatus.ACCEPTED
     )
