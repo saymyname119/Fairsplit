@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useDarkMode } from './utils/useDarkMode';
+
 import {
   api,
   type Group,
@@ -23,6 +25,8 @@ import { AuthModal } from './components/AuthModal';
 import { Footer } from './components/Footer';
 
 export const App: React.FC = () => {
+  const [isDark, toggleDark] = useDarkMode();
+
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     try {
       const saved = localStorage.getItem('sw_current_user');
@@ -302,6 +306,8 @@ export const App: React.FC = () => {
       {/* Navigation */}
       <TopNav
         currentUser={currentUser}
+        isDark={isDark}
+        onToggleDark={toggleDark}
         onOpenAuth={() => setIsAuthModalOpen(true)}
         onOpenNewGroup={handleOpenNewGroup}
         onOpenNewExpense={handleOpenNewExpense}

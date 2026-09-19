@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { X, Key, Shield, UserPlus, LogIn, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { X, Key, Shield, UserPlus, LogIn, AlertCircle, CheckCircle2, Zap } from 'lucide-react';
 import { api, type User, API_BASE } from '../api/client';
-import { signInWithGoogle, signOutSupabase } from '../utils/supabase';
+import { signInWithGoogle, signOutSupabase, isSupabaseConfigured } from '../utils/supabase';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -46,12 +46,82 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setMode(newMode);
   };
 
+  const loginWithCredentials = async (userEmail: string, userPass: string, userName?: string) => {
+    setError('');
+    setSuccess('');
+    setLoading(true);
+    try {
+      let res = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: userEmail, password: userPass }),
+      });
+
+      // If user doesn't exist yet, auto-register them
+      if (!res.ok && res.status === 401 && userName) {
+        const signupRes = await fetch(`${API_BASE}/users/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: userEmail, name: userName, password: userPass }),
+        });
+        if (signupRes.ok) {
+          res = await fetch(`${API_BASE}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: userEmail, password: userPass }),
+          });
+        }
+      }
+
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => null);
+        throw new Error(errBody?.detail || `Login failed (${res.status})`);
+      }
+
+      const tokens = await res.json();
+      api.setToken(tokens.access_token);
+      localStorage.setItem('sw_refresh_token', tokens.refresh_token);
+
+      const payload = JSON.parse(atob(tokens.access_token.split('.')[1]));
+      let displayName = userName || userEmail.split('@')[0];
+
+      try {
+        const profileRes = await fetch(`${API_BASE}/users/${payload.sub}`, {
+          headers: { Authorization: `Bearer ${tokens.access_token}` },
+        });
+        if (profileRes.ok) {
+          const profile = await profileRes.json();
+          if (profile?.name) displayName = profile.name;
+        }
+      } catch {
+        // Fallback
+      }
+
+      const userData: User = {
+        id: payload.sub,
+        name: displayName,
+        email: payload.email,
+      };
+      localStorage.setItem('sw_current_user', JSON.stringify(userData));
+      onSelectUser(userData);
+
+      setSuccess(`Signed in as ${displayName}!`);
+      setTimeout(() => {
+        resetForm();
+        onClose();
+      }, 500);
+    } catch (err: any) {
+      setError(err.message || 'Authentication failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccess('');
 
-    // Basic validation
     if (!email || !password) {
       setError('Email and password are required.');
       return;
@@ -65,11 +135,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    setLoading(true);
-
-    try {
-      if (mode === 'signup') {
-        // Step 1: Register
+    if (mode === 'signup') {
+      setLoading(true);
+      try {
         const signupRes = await fetch(`${API_BASE}/users/`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -81,73 +149,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           throw new Error(errBody?.detail || `Registration failed (${signupRes.status})`);
         }
 
-        const newUser = await signupRes.json();
-
-        // Step 2: Immediately log in to get JWT
-        const loginRes = await fetch(`${API_BASE}/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password }),
-        });
-
-        if (loginRes.ok) {
-          const tokens = await loginRes.json();
-          api.setToken(tokens.access_token);
-          localStorage.setItem('sw_refresh_token', tokens.refresh_token);
-        }
-
-        const userData: User = {
-          id: newUser.id,
-          name: newUser.name,
-          email: newUser.email,
-        };
-        localStorage.setItem('sw_current_user', JSON.stringify(userData));
-        onSelectUser(userData);
-
-        setSuccess('Account created! Signing you in…');
-        setTimeout(() => {
-          resetForm();
-          onClose();
-        }, 800);
-
-      } else {
-        // Login
-        const res = await fetch(`${API_BASE}/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password }),
-        });
-
-        if (!res.ok) {
-          const errBody = await res.json().catch(() => null);
-          throw new Error(errBody?.detail || `Login failed (${res.status})`);
-        }
-
-        const tokens = await res.json();
-        api.setToken(tokens.access_token);
-        localStorage.setItem('sw_refresh_token', tokens.refresh_token);
-
-        // Decode JWT to get user info (sub = user_id, email)
-        const payload = JSON.parse(atob(tokens.access_token.split('.')[1]));
-
-        const userData: User = {
-          id: payload.sub,
-          name: email.split('@')[0],
-          email: payload.email,
-        };
-        localStorage.setItem('sw_current_user', JSON.stringify(userData));
-        onSelectUser(userData);
-
-        setSuccess('Authenticated! Welcome back.');
-        setTimeout(() => {
-          resetForm();
-          onClose();
-        }, 600);
+        // Immediately log in
+        await loginWithCredentials(email, password, name);
+      } catch (err: any) {
+        setError(err.message || 'Registration failed.');
+        setLoading(false);
       }
-    } catch (err: any) {
-      setError(err.message || 'Something went wrong. Please try again.');
-    } finally {
-      setLoading(false);
+    } else {
+      await loginWithCredentials(email, password);
     }
   };
 
@@ -169,6 +178,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   const isLoggedIn = api.hasToken() || !!supabaseSession;
+  const hasSupabase = isSupabaseConfigured();
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -254,9 +264,139 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         {/* Auth Form (only when not logged in) */}
         {!isLoggedIn && (
           <>
+            {/* Quick 1-Click Demo Logins */}
+            <div style={{
+              marginBottom: '20px',
+              padding: '12px 14px',
+              borderRadius: 'var(--radius-md)',
+              backgroundColor: 'var(--color-surface-card)',
+              border: '1px dashed var(--color-hairline)',
+            }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                marginBottom: '8px',
+              }}>
+                <span className="caption-uppercase" style={{ color: 'var(--color-primary)', fontSize: '11px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <Zap size={13} /> Quick Demo Login
+                </span>
+                <span style={{ fontSize: '11px', color: 'var(--color-muted)' }}>
+                  1-click instant access
+                </span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => loginWithCredentials('tanay@example.com', 'password123', 'Tanay')}
+                  className="btn btn-secondary"
+                  style={{ height: '32px', padding: '0 8px', fontSize: '12px', fontWeight: 600 }}
+                  title="Sign in as Tanay"
+                >
+                  Tanay
+                </button>
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => loginWithCredentials('alex@example.com', 'password123', 'Alex')}
+                  className="btn btn-secondary"
+                  style={{ height: '32px', padding: '0 8px', fontSize: '12px', fontWeight: 600 }}
+                  title="Sign in as Alex"
+                >
+                  Alex
+                </button>
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => loginWithCredentials('sam@example.com', 'password123', 'Sam')}
+                  className="btn btn-secondary"
+                  style={{ height: '32px', padding: '0 8px', fontSize: '12px', fontWeight: 600 }}
+                  title="Sign in as Sam"
+                >
+                  Sam
+                </button>
+              </div>
+            </div>
+
+            {/* Google Sign-In Button */}
+            <button
+              type="button"
+              disabled={googleLoading || loading}
+              onClick={async () => {
+                if (!hasSupabase) {
+                  setError(
+                    'Google Sign-In requires Supabase credentials in frontend/.env. Please use the Quick Demo buttons above or email sign-in / sign-up below.'
+                  );
+                  return;
+                }
+                setGoogleLoading(true);
+                setError('');
+                try {
+                  await signInWithGoogle();
+                } catch (err: any) {
+                  setError(err.message || 'Google sign-in failed. Please try again.');
+                  setGoogleLoading(false);
+                }
+              }}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '12px',
+                padding: '11px 20px',
+                marginBottom: '16px',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--color-hairline)',
+                backgroundColor: 'var(--color-canvas)',
+                cursor: googleLoading ? 'wait' : 'pointer',
+                fontSize: '13.5px',
+                fontWeight: 600,
+                fontFamily: 'var(--font-sans)',
+                color: 'var(--color-ink)',
+                transition: 'all 0.2s ease',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                opacity: googleLoading ? 0.7 : hasSupabase ? 1 : 0.85,
+              }}
+            >
+              {googleLoading ? (
+                <span style={{
+                  width: '16px', height: '16px',
+                  border: '2px solid var(--color-hairline)',
+                  borderTop: '2px solid var(--color-primary)',
+                  borderRadius: '50%',
+                  animation: 'spin 0.8s linear infinite',
+                  display: 'inline-block',
+                }} />
+              ) : (
+                <svg width="17" height="17" viewBox="0 0 48 48">
+                  <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                  <path fill="#FBBC05" d="M10.53 28.59a14.5 14.5 0 0 1 0-9.18l-7.98-6.19a24.08 24.08 0 0 0 0 21.56l7.98-6.19z"/>
+                  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                </svg>
+              )}
+              <span>
+                {googleLoading ? 'Redirecting to Google…' : hasSupabase ? 'Sign in with Google' : 'Sign in with Google (Requires Supabase)'}
+              </span>
+            </button>
+
+            {/* Divider: or continue with email */}
+            <div style={{ position: 'relative', textAlign: 'center', margin: '0 0 16px' }}>
+              <hr style={{ border: 'none', borderTop: '1px solid var(--color-hairline)' }} />
+              <span style={{
+                position: 'absolute', top: '50%', left: '50%',
+                transform: 'translate(-50%, -50%)',
+                backgroundColor: 'var(--color-canvas)',
+                padding: '0 12px', fontSize: '11px', color: 'var(--color-muted)',
+                textTransform: 'uppercase', letterSpacing: '0.05em',
+              }}>
+                or email & password
+              </span>
+            </div>
+
             {/* Mode Tabs */}
             <div style={{
-              display: 'flex', gap: '4px', marginBottom: '20px',
+              display: 'flex', gap: '4px', marginBottom: '16px',
               backgroundColor: 'var(--color-surface-soft)',
               borderRadius: 'var(--radius-md)', padding: '4px',
             }}>
@@ -288,88 +428,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   transition: 'all 0.2s ease',
                 }}
               >
-                <UserPlus size={14} /> Sign Up
+                <UserPlus size={14} /> Create Account
               </button>
-            </div>
-
-            {/* ── Google Sign-In Button ─── */}
-            <button
-              type="button"
-              disabled={googleLoading || loading}
-              onClick={async () => {
-                setGoogleLoading(true);
-                setError('');
-                try {
-                  await signInWithGoogle();
-                  // Redirect happens automatically — Supabase redirects to Google
-                } catch (err: any) {
-                  setError(err.message || 'Google sign-in failed. Please try again.');
-                  setGoogleLoading(false);
-                }
-              }}
-              style={{
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '12px',
-                padding: '12px 20px',
-                marginBottom: '20px',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid var(--color-hairline)',
-                backgroundColor: 'var(--color-canvas)',
-                cursor: googleLoading ? 'wait' : 'pointer',
-                fontSize: '14px',
-                fontWeight: 600,
-                fontFamily: 'var(--font-sans)',
-                color: 'var(--color-ink)',
-                transition: 'all 0.2s ease',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-                opacity: googleLoading ? 0.7 : 1,
-              }}
-              onMouseEnter={(e) => {
-                if (!googleLoading) {
-                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)';
-                  e.currentTarget.style.borderColor = 'var(--color-muted-soft)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.06)';
-                e.currentTarget.style.borderColor = 'var(--color-hairline)';
-              }}
-            >
-              {googleLoading ? (
-                <span style={{
-                  width: '18px', height: '18px',
-                  border: '2px solid var(--color-hairline)',
-                  borderTop: '2px solid var(--color-primary)',
-                  borderRadius: '50%',
-                  animation: 'spin 0.8s linear infinite',
-                  display: 'inline-block',
-                }} />
-              ) : (
-                <svg width="18" height="18" viewBox="0 0 48 48">
-                  <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-                  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-                  <path fill="#FBBC05" d="M10.53 28.59a14.5 14.5 0 0 1 0-9.18l-7.98-6.19a24.08 24.08 0 0 0 0 21.56l7.98-6.19z"/>
-                  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-                </svg>
-              )}
-              <span>{googleLoading ? 'Redirecting to Google…' : 'Sign in with Google'}</span>
-            </button>
-
-            {/* Divider: or continue with email */}
-            <div style={{ position: 'relative', textAlign: 'center', margin: '0 0 20px' }}>
-              <hr style={{ border: 'none', borderTop: '1px solid var(--color-hairline)' }} />
-              <span style={{
-                position: 'absolute', top: '50%', left: '50%',
-                transform: 'translate(-50%, -50%)',
-                backgroundColor: 'var(--color-canvas)',
-                padding: '0 12px', fontSize: '11px', color: 'var(--color-muted)',
-                textTransform: 'uppercase', letterSpacing: '0.05em',
-              }}>
-                or continue with email
-              </span>
             </div>
 
             {/* Error / Success messages */}
@@ -408,7 +468,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <input
                     type="text"
                     className="text-input"
-                    placeholder="John Doe"
+                    placeholder="e.g. Tanay"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     disabled={loading}
@@ -430,7 +490,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 />
               </div>
 
-              <div className="form-group" style={{ marginBottom: '24px' }}>
+              <div className="form-group" style={{ marginBottom: '20px' }}>
                 <label className="form-label">Password</label>
                 <input
                   type="password"

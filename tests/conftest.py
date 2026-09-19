@@ -19,9 +19,12 @@ import os
 import pytest
 
 # Override settings BEFORE importing the app
-os.environ.setdefault("ENVIRONMENT", "test")
-os.environ.setdefault("JWT_SECRET", "test-secret-key")
-os.environ.setdefault("CLAUDE_API_KEY", "not-a-real-key")
+os.environ["ENVIRONMENT"] = "test"
+os.environ["JWT_SECRET"] = "test-secret-key"
+os.environ["CLAUDE_API_KEY"] = "not-a-real-key"
+
+from shared.config import get_settings
+get_settings.cache_clear()
 
 from collections.abc import Generator
 

@@ -57,8 +57,12 @@ async def close_redis() -> None:
     """Close the Redis connection. Called at app shutdown."""
     global _redis
     if _redis is not None:
-        await _redis.aclose()
-        _redis = None
+        try:
+            await _redis.aclose()
+        except RuntimeError:
+            pass
+        finally:
+            _redis = None
 
 
 # ── Cache operations ──────────────────────────────────────────────────────────

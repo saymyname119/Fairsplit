@@ -1,9 +1,11 @@
 import React from 'react';
-import { UserCheck } from 'lucide-react';
+import { UserCheck, Sun, Moon } from 'lucide-react';
 import type { User } from '../api/client';
 
 interface TopNavProps {
   currentUser: User | null;
+  isDark: boolean;
+  onToggleDark: () => void;
   onOpenAuth: () => void;
   onOpenNewGroup: () => void;
   onOpenNewExpense: () => void;
@@ -11,6 +13,8 @@ interface TopNavProps {
 
 export const TopNav: React.FC<TopNavProps> = ({
   currentUser,
+  isDark,
+  onToggleDark,
   onOpenAuth,
   onOpenNewGroup,
   onOpenNewExpense,
@@ -18,10 +22,10 @@ export const TopNav: React.FC<TopNavProps> = ({
   return (
     <header
       style={{
-        backgroundColor: 'rgba(250, 249, 245, 0.88)',
+        backgroundColor: 'var(--color-nav-bg)',
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
-        borderBottom: '1px solid rgba(230, 223, 216, 0.6)',
+        borderBottom: '1px solid var(--color-nav-border)',
         position: 'sticky',
         top: 0,
         zIndex: 100,
@@ -39,7 +43,7 @@ export const TopNav: React.FC<TopNavProps> = ({
           justifyContent: 'space-between',
         }}
       >
-        {/* Brand: Anthropic Radial Spike Glyphs + Wordmark */}
+        {/* Brand: Radial Spike Glyphs + Wordmark */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
           <div
             style={{
@@ -116,6 +120,20 @@ export const TopNav: React.FC<TopNavProps> = ({
             style={{ height: '34px', padding: '0 18px', fontSize: '13.5px' }}
           >
             + Add Expense
+          </button>
+
+          {/* Dark Mode Toggle */}
+          <button
+            onClick={onToggleDark}
+            aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            className="btn-icon-circular"
+            style={{
+              color: 'var(--color-muted)',
+              marginLeft: '2px',
+            }}
+          >
+            {isDark ? <Sun size={15} /> : <Moon size={15} />}
           </button>
 
           {/* User avatar pill */}

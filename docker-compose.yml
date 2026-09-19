@@ -8,9 +8,10 @@ services:
     build:
       context: .
       target: builder
+    working_dir: /app
     command: ["uvicorn", "api.app:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     volumes:
-      - .:/app               # mount source so --reload picks up changes
+      - .:/app:z               # mount source so --reload picks up changes
     ports:
       - "8000:8000"
     env_file:
@@ -24,6 +25,20 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - fairsplit-net
+
+  # ── Frontend ─────────────────────────────────────────────────────────────
+  frontend:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./frontend:/app:z
+    ports:
+      - "5173:5173"
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+    depends_on:
+      - app
     networks:
       - fairsplit-net
 

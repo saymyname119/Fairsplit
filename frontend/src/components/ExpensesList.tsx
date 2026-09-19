@@ -220,8 +220,8 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                     ? `1px solid ${isSettlement ? 'var(--color-success)' : 'var(--color-primary)'}`
                     : '1px solid var(--color-hairline)',
                   backgroundColor: isHovered
-                    ? (isSettlement ? 'rgba(93,184,114,0.04)' : 'rgba(204,120,92,0.04)')
-                    : '#ffffff',
+                    ? (isSettlement ? 'rgba(93,184,114,0.08)' : 'rgba(204,120,92,0.08)')
+                    : 'var(--color-surface-card)',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease',
                   boxShadow: isHovered ? '0 2px 12px rgba(20,20,19,0.07)' : '0 1px 3px rgba(20,20,19,0.04)',
