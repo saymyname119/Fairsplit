@@ -17,7 +17,7 @@ class ParsedSplitValue(BaseModel):
     """One participant's value in a parsed non-equal split."""
 
     name: str  # raw name from LLM — needs resolving to user_id
-    value: Decimal  # percentage or exact amount
+    value: Decimal = Field(allow_inf_nan=False)  #  # percentage or exact amount
 
 
 class ParsedExpense(BaseModel):
@@ -31,7 +31,7 @@ class ParsedExpense(BaseModel):
       See docs/design-decisions.md §AI for full rationale.
     """
 
-    amount: Decimal
+    amount: Decimal = Field(allow_inf_nan=False)
     description: str
     paid_by_name: str  # resolved to paid_by_id after member lookup
     paid_by_id: str | None = None  # set after name resolution

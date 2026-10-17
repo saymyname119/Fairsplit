@@ -12,8 +12,8 @@ Usage in a route:
         ...
 
 Design notes:
-  - Returns a plain dict (not a full User domain model) to avoid a DB round-trip
-    on every authenticated request. The JWT payload already contains user_id and email.
+  - Validates account state and password-change time on every authenticated request
+    so disabled accounts and sessions revoked by password recovery stop working.
   - If a route needs the full User object (rare), it can call UserService.get_user()
     with the user_id from the dict.
   - OAuth2PasswordBearer tells Swagger UI to show the "Authorize" button, making
@@ -27,15 +27,20 @@ from typing import Any
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from modules.user.repository import UserRepository
 from shared.config import get_settings
+from shared.db.session import get_db
 from shared.errors import AuthenticationError
 
 # tokenUrl tells Swagger UI where to send the login request for the "Authorize" flow.
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict[str, Any]:
+async def get_current_user(
+    token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)
+) -> dict[str, Any]:
     """
     Decode and validate the JWT bearer token.
 
@@ -64,6 +69,14 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict[str, Any
         if not user_id or not email:
             raise AuthenticationError("Invalid token payload")
 
+        user = await UserRepository(db).get_by_id(user_id)
+        if not user or not user.is_active or user.deleted_at:
+            raise AuthenticationError("Account is unavailable")
+        if (
+            user.password_changed_at
+            and payload.get("iat", 0) <= user.password_changed_at.timestamp()
+        ):
+            raise AuthenticationError("Password changed. Please sign in again.")
         return {"user_id": user_id, "email": email}
 
     except JWTError as err:

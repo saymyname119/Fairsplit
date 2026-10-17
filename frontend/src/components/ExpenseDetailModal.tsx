@@ -1,3 +1,4 @@
+import { formatMoney } from '../utils/currency';
 import React, { useState, useEffect } from 'react';
 import {
   X, Trash2, Pencil, CheckCircle2, AlertCircle, Calendar,
@@ -107,7 +108,7 @@ export const ExpenseDetailModal: React.FC<ExpenseDetailModalProps> = ({
       });
     } else if (splitStrategy === 'EXACT') {
       if (Math.abs(exactSum - amount) > 0.01) {
-        setErrorMsg(`Split amounts ($${exactSum.toFixed(2)}) must equal total ($${amount.toFixed(2)}).`);
+        setErrorMsg(`Split amounts (${formatMoney(exactSum, group.currency)}) must equal total (${formatMoney(amount, group.currency)}).`);
         return;
       }
       group.members.forEach((m) => {
@@ -186,7 +187,7 @@ export const ExpenseDetailModal: React.FC<ExpenseDetailModalProps> = ({
                   fontSize: '42px', fontWeight: 700, letterSpacing: '-1px',
                   color: isSettlement ? 'var(--color-success)' : 'var(--color-ink)',
                 }}>
-                  ${expense.amount.toFixed(2)}
+                  {formatMoney(expense.amount, group.currency)}
                 </div>
                 <div style={{ fontSize: '13px', color: 'var(--color-muted)', marginTop: '4px' }}>
                   {expense.currency}
@@ -284,7 +285,7 @@ export const ExpenseDetailModal: React.FC<ExpenseDetailModalProps> = ({
                         </div>
                         <div style={{ textAlign: 'right' }}>
                           <div className="font-mono" style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-ink)' }}>
-                            ${(split.amount || 0).toFixed(2)}
+                            {formatMoney(split.amount || 0, group.currency)}
                           </div>
                           <div style={{ fontSize: '10px', color: 'var(--color-muted)' }}>{pct}%</div>
                         </div>
@@ -418,7 +419,7 @@ export const ExpenseDetailModal: React.FC<ExpenseDetailModalProps> = ({
 
               {/* Split Strategy */}
               <div style={{ marginBottom: '16px' }}>
-                <label className="form-label" style={{ marginBottom: '8px', display: 'block' }}>Split Strategy</label>
+                <label className="form-label" style={{ marginBottom: '8px', display: 'block' }}>How to split</label>
                 <div style={{
                   display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '4px',
                   backgroundColor: 'var(--color-surface-soft)', padding: '3px',
@@ -453,7 +454,7 @@ export const ExpenseDetailModal: React.FC<ExpenseDetailModalProps> = ({
                       <span className="caption" style={{ color: 'var(--color-muted)' }}>Select who splits equally:</span>
                       {amount > 0 && selectedUserIds.length > 0 && (
                         <span className="caption font-mono" style={{ color: 'var(--color-primary)', fontWeight: 600 }}>
-                          ${(amount / selectedUserIds.length).toFixed(2)} / person
+                          {formatMoney(amount / selectedUserIds.length, group.currency)} / person
                         </span>
                       )}
                     </div>
@@ -486,7 +487,7 @@ export const ExpenseDetailModal: React.FC<ExpenseDetailModalProps> = ({
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                       <span className="caption" style={{ color: 'var(--color-muted)' }}>Exact amount per member:</span>
                       <span className="caption font-mono" style={{ color: Math.abs(exactSum - amount) <= 0.01 ? 'var(--color-success)' : 'var(--color-error)', fontWeight: 600 }}>
-                        Remaining: ${(amount - exactSum).toFixed(2)}
+                        Remaining: {formatMoney(amount - exactSum, group.currency)}
                       </span>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

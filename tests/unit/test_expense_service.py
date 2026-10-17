@@ -20,7 +20,11 @@ def mock_session():
 
 @pytest.fixture
 def expense_service(mock_session):
-    return ExpenseService(mock_session)
+    service = ExpenseService(mock_session)
+    service._group_repo.get_by_id_or_raise = AsyncMock(
+        return_value=type("Group", (), {"currency": "INR"})()
+    )
+    return service
 
 
 def _make_mock_expense(
@@ -61,12 +65,11 @@ async def test_get_expense_happy_path(expense_service):
         _make_mock_split(user_id="user-1", owed=Decimal("15")),
         _make_mock_split(user_id="user-2", owed=Decimal("15")),
     ]
-    expense_service._repo.get_by_id_or_raise = AsyncMock(
-        return_value=(mock_expense, mock_splits)
-    )
+    expense_service._repo.get_by_id_or_raise = AsyncMock(return_value=(mock_expense, mock_splits))
 
     result = await expense_service.get_expense("exp-1")
     assert result.id == "exp-1"
+    assert result.currency == "INR"
     assert result.amount == Decimal("30")
     assert len(result.splits) == 2
 
@@ -85,9 +88,7 @@ async def test_get_expense_not_found(expense_service):
 async def test_get_expense_soft_deleted(expense_service):
     mock_expense = _make_mock_expense()
     mock_expense.deleted_at = datetime.now()
-    expense_service._repo.get_by_id_or_raise = AsyncMock(
-        return_value=(mock_expense, [])
-    )
+    expense_service._repo.get_by_id_or_raise = AsyncMock(return_value=(mock_expense, []))
 
     with pytest.raises(NotFoundError):
         await expense_service.get_expense("exp-1")
@@ -107,6 +108,7 @@ async def test_list_expenses_happy_path(expense_service):
         return_value=[(expense1, splits1), (expense2, splits2)]
     )
 
+    expense_service._group_repo.get_by_id.return_value.currency = "INR"
     result = await expense_service.list_expenses("g1", limit=50, offset=0)
     assert len(result) == 2
     assert result[0].id == "exp-1"
@@ -125,9 +127,7 @@ async def test_list_expenses_group_not_found(expense_service):
 async def test_update_expense_happy_path(expense_service):
     mock_expense = _make_mock_expense()
     mock_splits = [_make_mock_split()]
-    expense_service._repo.get_by_id_or_raise = AsyncMock(
-        return_value=(mock_expense, mock_splits)
-    )
+    expense_service._repo.get_by_id_or_raise = AsyncMock(return_value=(mock_expense, mock_splits))
 
     req = UpdateExpenseRequest(description="Updated Dinner", amount=Decimal("45"))
     updated = await expense_service.update_expense("exp-1", req, updated_by_id="user-1")
@@ -140,12 +140,9 @@ async def test_update_expense_happy_path(expense_service):
 @pytest.mark.asyncio
 async def test_update_expense_unauthorized(expense_service):
     mock_expense = _make_mock_expense()
-    expense_service._repo.get_by_id_or_raise = AsyncMock(
-        return_value=(mock_expense, [])
-    )
+    expense_service._repo.get_by_id_or_raise = AsyncMock(return_value=(mock_expense, []))
     expense_service._group_repo.get_member = AsyncMock(return_value=None)
 
     req = UpdateExpenseRequest(description="Hacked")
     with pytest.raises(ForbiddenError):
         await expense_service.update_expense("exp-1", req, updated_by_id="other-user")
-

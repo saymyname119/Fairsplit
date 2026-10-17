@@ -29,7 +29,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from pydantic import BaseModel, Field
-from sqlalchemy import ForeignKey, Numeric, String, UniqueConstraint
+from sqlalchemy import CheckConstraint, ForeignKey, Integer, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from shared.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -89,6 +89,13 @@ class SettlementORM(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     """
 
     __tablename__ = "ledger_settlements"
+    __table_args__ = (UniqueConstraint("group_id", "idempotency_key"),)
+
+    idempotency_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    request_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    reversal_of: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("ledger_settlements.id"), unique=True
+    )
 
     group_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("group_groups.id"), nullable=False, index=True
@@ -140,6 +147,7 @@ class Settlement(BaseModel):
     to_user_id: str
     amount: Decimal
     notes: str | None = None
+    reversal_of: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -149,7 +157,9 @@ class CreateSettlementRequest(BaseModel):
 
     from_user_id: str
     to_user_id: str
-    amount: Decimal = Field(gt=0)
+    amount: Decimal = Field(gt=0, max_digits=19, decimal_places=4)
+    expected_version: int = Field(ge=0)
+    idempotency_key: str = Field(min_length=1, max_length=100)
     notes: str | None = Field(default=None, max_length=500)
 
 
@@ -171,5 +181,36 @@ class UserBalance(BaseModel):
 class SimplifiedBalanceResult(BaseModel):
     """Result of the greedy net-flow simplification algorithm."""
 
+    version: int = 0
+    currency: str = "USD"
     simplified: list[SimplifiedDebt]
     net_by_user: dict[str, Decimal]
+
+
+class LedgerStateORM(Base):
+    __tablename__ = "ledger_state"
+    group_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("group_groups.id"), primary_key=True
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+
+
+class JournalORM(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """A balanced posting: +amount to credit account, -amount to debit account.
+
+    Each row contains both legs so an unbalanced transaction cannot be inserted.
+    PostgreSQL triggers reject UPDATE and DELETE; reversals append opposite legs.
+    """
+
+    __tablename__ = "ledger_journal"
+    __table_args__ = (CheckConstraint("credit_user_id <> debit_user_id"),)
+    group_id: Mapped[str] = mapped_column(String(36), ForeignKey("group_groups.id"), index=True)
+    credit_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("user_accounts.id"))
+    debit_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("user_accounts.id"))
+    amount: Mapped[Decimal] = mapped_column(Numeric(19, 4), nullable=False)
+    reason: Mapped[str] = mapped_column(String(100), nullable=False)
+
+
+class ReverseSettlementRequest(BaseModel):
+    expected_version: int = Field(ge=0)
+    idempotency_key: str = Field(min_length=1, max_length=100)

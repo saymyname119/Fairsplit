@@ -15,7 +15,12 @@ def mock_session():
 
 @pytest.fixture
 def ledger_service(mock_session):
-    return LedgerService(mock_session)
+    mock_session.add = MagicMock()
+    service = LedgerService(mock_session)
+    service._repo.lock_group = AsyncMock(return_value=MagicMock(version=0))
+    service._repo.version = AsyncMock(return_value=0)
+    service._repo.find_retry = AsyncMock(return_value=None)
+    return service
 
 
 @pytest.mark.asyncio
@@ -48,11 +53,32 @@ async def test_handle_expense_created(ledger_service):
 
 @pytest.mark.asyncio
 async def test_record_settlement_reduces_balance(ledger_service):
-    request = CreateSettlementRequest(from_user_id="bob", to_user_id="alice", amount=Decimal("10"))
+    request = CreateSettlementRequest(
+        from_user_id="bob",
+        to_user_id="alice",
+        amount=Decimal("10"),
+        expected_version=0,
+        idempotency_key="test-key",
+    )
 
     mock_balance = AsyncMock()
     mock_balance.net_amount = Decimal("15")  # alice is owed 15 by bob
-    ledger_service._repo.get_balance_for_update = AsyncMock(return_value=mock_balance)
+    from modules.ledger.models import SimplifiedBalanceResult, SimplifiedDebt
+
+    ledger_service.get_simplified_balances = AsyncMock(
+        return_value=SimplifiedBalanceResult(
+            version=0,
+            simplified=[
+                SimplifiedDebt(from_user_id="bob", to_user_id="alice", amount=Decimal("15"))
+            ],
+            net_by_user={},
+        )
+    )
+
+    async def upsert(group_id, c, d, delta):
+        mock_balance.net_amount += delta
+
+    ledger_service._repo.upsert_balance = AsyncMock(side_effect=upsert)
 
     async def mock_record_settlement(settlement):
         settlement.id = "s-1"
@@ -68,11 +94,32 @@ async def test_record_settlement_reduces_balance(ledger_service):
 
 @pytest.mark.asyncio
 async def test_record_settlement_exceeds_balance(ledger_service):
-    request = CreateSettlementRequest(from_user_id="bob", to_user_id="alice", amount=Decimal("20"))
+    request = CreateSettlementRequest(
+        from_user_id="bob",
+        to_user_id="alice",
+        amount=Decimal("20"),
+        expected_version=0,
+        idempotency_key="test-key",
+    )
 
     mock_balance = AsyncMock()
     mock_balance.net_amount = Decimal("15")
-    ledger_service._repo.get_balance_for_update = AsyncMock(return_value=mock_balance)
+    from modules.ledger.models import SimplifiedBalanceResult, SimplifiedDebt
 
-    with pytest.raises(ConflictError, match="exceeds balance"):
+    ledger_service.get_simplified_balances = AsyncMock(
+        return_value=SimplifiedBalanceResult(
+            version=0,
+            simplified=[
+                SimplifiedDebt(from_user_id="bob", to_user_id="alice", amount=Decimal("15"))
+            ],
+            net_by_user={},
+        )
+    )
+
+    async def upsert(group_id, c, d, delta):
+        mock_balance.net_amount += delta
+
+    ledger_service._repo.upsert_balance = AsyncMock(side_effect=upsert)
+
+    with pytest.raises(ConflictError, match="exceeds current suggested payment"):
         await ledger_service.record_settlement("group-1", request)

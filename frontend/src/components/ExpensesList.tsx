@@ -1,3 +1,4 @@
+import { formatMoney } from '../utils/currency';
 import React, { useState, useMemo } from 'react';
 import { Receipt, Calendar, CreditCard, ChevronRight, Search, Filter } from 'lucide-react';
 import type { Expense } from '../api/client';
@@ -48,7 +49,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <Receipt size={18} style={{ color: 'var(--color-primary)' }} />
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '22px', fontWeight: 500, color: 'var(--color-ink)' }}>
-            Ledger Activity &amp; Receipts
+            Expenses
           </h2>
         </div>
         <button
@@ -279,7 +280,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                       fontSize: '16px', fontWeight: 700,
                       color: isSettlement ? 'var(--color-success)' : 'var(--color-ink)',
                     }}>
-                      ${expense.amount.toFixed(2)}
+                      {formatMoney(expense.amount, currency)}
                     </div>
                     <div style={{ fontSize: '10px', color: 'var(--color-muted-soft)' }}>{currency}</div>
                   </div>

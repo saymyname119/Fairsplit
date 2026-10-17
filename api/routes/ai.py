@@ -1,35 +1,26 @@
-"""api/routes/ai.py — AI / natural language expense parsing endpoint."""
+"""Authenticated, member-scoped AI expense previews. Never creates expenses."""
 
-from __future__ import annotations
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from fastapi import APIRouter
-from fastapi.responses import JSONResponse
+from api.auth_dependency import get_current_user
+from api.routes.ledger import require_member
+from modules.ai.models import ParseExpenseRequest, ParseExpenseResponse
+from modules.ai.service import AiService
+from modules.group.service import GroupService
+from shared.db.session import get_db
 
-from modules.ai.models import ParseExpenseRequest
-
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_member)])
 
 
-@router.post(
-    "/{group_id}/expenses/parse",
-    summary="Parse natural language into expense preview",
-    responses={
-        200: {"description": "Parsed expense preview (not yet created — confirm first)"},
-        422: {"description": "Ambiguous input — clarification required"},
-        502: {"description": "Claude API unavailable"},
-    },
-)
-async def parse_expense(group_id: str, request: ParseExpenseRequest) -> JSONResponse:
-    """
-    POST /groups/:id/expenses/parse
-
-    Accepts natural language text and returns a structured expense preview.
-    Does NOT create the expense — the caller must confirm and POST to
-    /groups/:id/expenses to actually create it.
-
-    Example input:
-        { "text": "I paid 800 for dinner with Raj and Priya, split equally" }
-
-    Full implementation in Prompt 4 (AI module + Claude API integration).
-    """
-    return JSONResponse(status_code=501, content={"message": "Coming in Prompt 4"})
+@router.post("/{group_id}/expenses/parse", response_model=ParseExpenseResponse)
+async def parse_expense(
+    group_id: str,
+    request: ParseExpenseRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    group = await GroupService(db).get_group(group_id)
+    return await AiService().parse_expense(
+        request, group.members, current_user["user_id"], group.currency
+    )

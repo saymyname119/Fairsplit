@@ -126,6 +126,7 @@ class Split(BaseModel):
 
 
 class Expense(BaseModel):
+    currency: str = "USD"
     """Public domain representation of an expense."""
 
     id: str

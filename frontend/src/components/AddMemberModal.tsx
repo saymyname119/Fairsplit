@@ -330,12 +330,10 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
               <AlertTriangle size={16} />
-              <span>Resend Testing Sandbox Active</span>
+              <span>Email not delivered</span>
             </div>
             <p style={{ margin: 0, fontSize: '12px', lineHeight: 1.45, color: 'var(--color-text-secondary)' }}>
-              {sandboxNotice.includes('tanaysinghyt119@gmail.com')
-                ? 'Resend testing tier only delivers outbound emails to tanaysinghyt119@gmail.com until a custom domain is verified at resend.com/domains. You can share the instant direct invite link below!'
-                : sandboxNotice}
+              Share the invitation link below so your friend can join the group.
             </p>
           </div>
         )}
@@ -378,7 +376,7 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
             >
               <span style={{ fontSize: '13px', color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <Sparkles size={14} />
-                <span>Invites sent via <strong>Resend</strong></span>
+                <span>Invite by email</span>
               </span>
               <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>Valid for 7 days</span>
             </div>

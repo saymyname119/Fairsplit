@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock
+from types import SimpleNamespace
 
 import pytest
 from jose import jwt
@@ -33,7 +35,9 @@ def _make_token(
 @pytest.mark.asyncio
 async def test_valid_access_token():
     token = _make_token()
-    result = await get_current_user(token)
+    db = AsyncMock()
+    db.get.return_value = SimpleNamespace(is_active=True, deleted_at=None, password_changed_at=None)
+    result = await get_current_user(token, db)
     assert result["user_id"] == "user-123"
     assert result["email"] == "test@example.com"
 

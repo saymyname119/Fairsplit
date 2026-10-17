@@ -33,13 +33,10 @@ class IGroupService(abc.ABC):
     ) -> Group: ...
 
     @abc.abstractmethod
-    async def remove_member(
-        self, group_id: str, remover_id: str, user_id: str
-    ) -> None: ...
+    async def remove_member(self, group_id: str, remover_id: str, user_id: str) -> None: ...
 
     @abc.abstractmethod
     async def list_user_groups(self, user_id: str) -> list[Group]: ...
-
 
 
 class GroupService(IGroupService):
@@ -51,6 +48,7 @@ class GroupService(IGroupService):
     async def create_group(self, creator_id: str, request: CreateGroupRequest) -> Group:
         orm_group = GroupORM(
             name=request.name,
+            currency=request.currency,
             description=request.description,
             created_by_id=creator_id,
         )
@@ -84,7 +82,6 @@ class GroupService(IGroupService):
     async def list_user_groups(self, user_id: str) -> list[Group]:
         orm_groups = await self._repo.list_by_user(user_id)
         return [self._map_to_domain(g) for g in orm_groups]
-
 
     async def add_member(self, group_id: str, adder_id: str, request: AddMemberRequest) -> Group:
         await self._repo.get_by_id_or_raise(group_id)
@@ -141,9 +138,7 @@ class GroupService(IGroupService):
         )
         return domain_group
 
-    async def remove_member(
-        self, group_id: str, remover_id: str, user_id: str
-    ) -> None:
+    async def remove_member(self, group_id: str, remover_id: str, user_id: str) -> None:
         await self._repo.get_by_id_or_raise(group_id)
 
         # Only admins can remove members
@@ -159,14 +154,13 @@ class GroupService(IGroupService):
         target = await self._repo.get_member(group_id, user_id)
         if not target:
             from shared.errors import NotFoundError
+
             raise NotFoundError("Member", user_id)
 
         # Check for outstanding balances
         has_balance = await self._ledger_repo.has_outstanding_balance(group_id, user_id)
         if has_balance:
-            raise ConflictError(
-                "Cannot remove member with outstanding balances — settle first"
-            )
+            raise ConflictError("Cannot remove member with outstanding balances — settle first")
 
         await self._repo.remove_member(group_id, user_id)
 
@@ -190,6 +184,7 @@ class GroupService(IGroupService):
         return Group(
             id=orm_group.id,
             name=orm_group.name,
+            currency=orm_group.currency or "USD",
             description=orm_group.description,
             created_by_id=orm_group.created_by_id,
             created_at=orm_group.created_at,

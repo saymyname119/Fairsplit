@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Key, Shield, UserPlus, LogIn, AlertCircle, CheckCircle2, Zap } from 'lucide-react';
+import { X, Key, Shield, UserPlus, LogIn, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { api, type User, API_BASE } from '../api/client';
 import { signInWithGoogle, signOutSupabase, isSupabaseConfigured } from '../utils/supabase';
 
@@ -8,6 +8,7 @@ interface AuthModalProps {
   currentUser: User | null;
   supabaseSession?: import('../utils/supabase').Session | null;
   onClose: () => void;
+  onForgotPassword: () => void;
   onSelectUser: (user: User | null) => void;
   onSupabaseLogout?: () => void;
 }
@@ -19,6 +20,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   currentUser,
   supabaseSession,
   onClose,
+  onForgotPassword,
   onSelectUser,
   onSupabaseLogout,
 }) => {
@@ -79,7 +81,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
 
       const tokens = await res.json();
-      api.setToken(tokens.access_token);
+      api.setToken(tokens.access_token, tokens.refresh_token);
       localStorage.setItem('sw_refresh_token', tokens.refresh_token);
 
       const payload = JSON.parse(atob(tokens.access_token.split('.')[1]));
@@ -189,7 +191,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Shield size={14} style={{ color: 'var(--color-primary)' }} />
               <span className="caption-uppercase" style={{ color: 'var(--color-primary)' }}>
-                {isLoggedIn ? 'Active Session' : 'Authentication'}
+                {isLoggedIn ? 'Your account' : 'Welcome'}
               </span>
             </div>
             <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '26px', marginTop: '2px' }}>
@@ -264,59 +266,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         {/* Auth Form (only when not logged in) */}
         {!isLoggedIn && (
           <>
-            {/* Quick 1-Click Demo Logins */}
-            <div style={{
-              marginBottom: '20px',
-              padding: '12px 14px',
-              borderRadius: 'var(--radius-md)',
-              backgroundColor: 'var(--color-surface-card)',
-              border: '1px dashed var(--color-hairline)',
-            }}>
-              <div style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                marginBottom: '8px',
-              }}>
-                <span className="caption-uppercase" style={{ color: 'var(--color-primary)', fontSize: '11px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <Zap size={13} /> Quick Demo Login
-                </span>
-                <span style={{ fontSize: '11px', color: 'var(--color-muted)' }}>
-                  1-click instant access
-                </span>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
-                <button
-                  type="button"
-                  disabled={loading}
-                  onClick={() => loginWithCredentials('tanay@example.com', 'password123', 'Tanay')}
-                  className="btn btn-secondary"
-                  style={{ height: '32px', padding: '0 8px', fontSize: '12px', fontWeight: 600 }}
-                  title="Sign in as Tanay"
-                >
-                  Tanay
-                </button>
-                <button
-                  type="button"
-                  disabled={loading}
-                  onClick={() => loginWithCredentials('alex@example.com', 'password123', 'Alex')}
-                  className="btn btn-secondary"
-                  style={{ height: '32px', padding: '0 8px', fontSize: '12px', fontWeight: 600 }}
-                  title="Sign in as Alex"
-                >
-                  Alex
-                </button>
-                <button
-                  type="button"
-                  disabled={loading}
-                  onClick={() => loginWithCredentials('sam@example.com', 'password123', 'Sam')}
-                  className="btn btn-secondary"
-                  style={{ height: '32px', padding: '0 8px', fontSize: '12px', fontWeight: 600 }}
-                  title="Sign in as Sam"
-                >
-                  Sam
-                </button>
-              </div>
-            </div>
-
             {/* Google Sign-In Button */}
             <button
               type="button"
@@ -324,7 +273,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               onClick={async () => {
                 if (!hasSupabase) {
                   setError(
-                    'Google Sign-In requires Supabase credentials in frontend/.env. Please use the Quick Demo buttons above or email sign-in / sign-up below.'
+                    'Google sign-in is unavailable. Please sign in with your email.'
                   );
                   return;
                 }
@@ -376,7 +325,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </svg>
               )}
               <span>
-                {googleLoading ? 'Redirecting to Google…' : hasSupabase ? 'Sign in with Google' : 'Sign in with Google (Requires Supabase)'}
+                {googleLoading ? 'Redirecting to Google…' : 'Sign in with Google'}
               </span>
             </button>
 
@@ -460,6 +409,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
             )}
 
+            {mode === 'login' && <button type="button" className="btn btn-secondary" onClick={onForgotPassword}>Forgot password?</button>}
             {/* Form */}
             <form onSubmit={handleSubmit}>
               {mode === 'signup' && (

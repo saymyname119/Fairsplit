@@ -1,5 +1,5 @@
 from decimal import Decimal
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -14,7 +14,12 @@ def mock_session():
 
 @pytest.fixture
 def ledger_service(mock_session):
-    return LedgerService(mock_session)
+    mock_session.add = MagicMock()
+    service = LedgerService(mock_session)
+    service._repo.lock_group = AsyncMock(return_value=MagicMock(version=0))
+    service._repo.version = AsyncMock(return_value=0)
+    service._repo.find_retry = AsyncMock(return_value=None)
+    return service
 
 
 @pytest.mark.asyncio
@@ -24,7 +29,12 @@ async def test_debt_simplification_three_people_chain(ledger_service):
     # B-C: C is owed 5 (creditor C, debtor B, net 5)
 
     mock_balances = [
-        LedgerBalanceORM(group_id="g1", creditor_id="B", debtor_id="A", net_amount=Decimal("10")),
+        LedgerBalanceORM(
+            group_id="g1",
+            creditor_id="B",
+            debtor_id="A",
+            net_amount=Decimal("10"),
+        ),
         LedgerBalanceORM(group_id="g1", creditor_id="C", debtor_id="B", net_amount=Decimal("5")),
     ]
     ledger_service._repo.get_group_balances = AsyncMock(return_value=mock_balances)
@@ -50,9 +60,24 @@ async def test_debt_simplification_three_people_chain(ledger_service):
 async def test_debt_simplification_circular(ledger_service):
     # A owes B 10, B owes C 10, C owes A 10
     mock_balances = [
-        LedgerBalanceORM(group_id="g1", creditor_id="B", debtor_id="A", net_amount=Decimal("10")),
-        LedgerBalanceORM(group_id="g1", creditor_id="C", debtor_id="B", net_amount=Decimal("10")),
-        LedgerBalanceORM(group_id="g1", creditor_id="A", debtor_id="C", net_amount=Decimal("10")),
+        LedgerBalanceORM(
+            group_id="g1",
+            creditor_id="B",
+            debtor_id="A",
+            net_amount=Decimal("10"),
+        ),
+        LedgerBalanceORM(
+            group_id="g1",
+            creditor_id="C",
+            debtor_id="B",
+            net_amount=Decimal("10"),
+        ),
+        LedgerBalanceORM(
+            group_id="g1",
+            creditor_id="A",
+            debtor_id="C",
+            net_amount=Decimal("10"),
+        ),
     ]
     ledger_service._repo.get_group_balances = AsyncMock(return_value=mock_balances)
 

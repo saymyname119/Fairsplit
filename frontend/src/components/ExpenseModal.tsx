@@ -1,6 +1,7 @@
+import { formatMoney, currencySymbol } from '../utils/currency';
 import React, { useState, useEffect } from 'react';
 import { X, CheckCircle2, AlertCircle } from 'lucide-react';
-import type { Group, SplitStrategy, SplitItem } from '../api/client';
+import { api, type ExpensePreview, type Group, type SplitStrategy, type SplitItem } from '../api/client';
 
 interface ExpenseModalProps {
   group: Group;
@@ -22,6 +23,9 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
   onClose,
   onSubmit,
 }) => {
+  const [aiText, setAiText] = useState('');
+  const [aiBusy, setAiBusy] = useState(false);
+  const [preview, setPreview] = useState<ExpensePreview | null>(null);
   const [description, setDescription] = useState('');
   const [amountStr, setAmountStr] = useState('');
   const [paidById, setPaidById] = useState(group.members[0]?.user_id || '');
@@ -47,6 +51,7 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
   // Reset form fields when modal opens
   useEffect(() => {
     if (isOpen) {
+      setAiText(''); setPreview(null); setAiBusy(false);
       setDescription('');
       setAmountStr('');
       setIsSubmitting(false);
@@ -145,7 +150,7 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
       });
     } else if (splitStrategy === 'EXACT') {
       if (Math.abs(exactSum - amount) > 0.01) {
-        setErrorMsg(`Sum of split amounts ($${exactSum.toFixed(2)}) must equal total ($${amount.toFixed(2)}).`);
+        setErrorMsg(`Sum of split amounts (${formatMoney(exactSum, group.currency)}) must equal total (${formatMoney(amount, group.currency)}).`);
         return;
       }
       group.members.forEach((m) => {
@@ -199,6 +204,27 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
     }
   };
 
+  const parseText = async () => {
+    setAiBusy(true); setErrorMsg(null); setPreview(null);
+    try { setPreview(await api.parseExpense(group.id, aiText)); }
+    catch (err) { setErrorMsg(err instanceof Error ? err.message : 'Unable to parse expense.'); }
+    finally { setAiBusy(false); }
+  };
+  const savePreview = async () => {
+    if (!preview) return;
+    setIsSubmitting(true); setErrorMsg(null);
+    try {
+      const splits = preview.participant_ids.map((user_id, index) => {
+        const part = preview.splits.find(s => s.name.trim().toLowerCase() === preview.participant_names[index].trim().toLowerCase());
+        return { user_id, ...(preview.split_type === 'percent' ? { percentage: Number(part?.value) } : preview.split_type === 'exact' ? { amount: Number(part?.value) } : {}) };
+      });
+      await onSubmit({ description: preview.description, amount: Number(preview.amount), currency: group.currency,
+        paid_by_id: preview.paid_by_id, split_strategy: preview.split_type === 'percent' ? 'PERCENTAGE' : preview.split_type === 'exact' ? 'EXACT' : 'EQUAL', splits });
+      onClose();
+    } catch (err) { setErrorMsg(err instanceof Error ? err.message : 'Unable to save expense.'); }
+    finally { setIsSubmitting(false); }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -239,6 +265,19 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
           </div>
         )}
 
+        <section style={{ marginBottom: 24 }} aria-label="Describe an expense">
+          <label className="form-label" htmlFor="ai-expense">Describe an expense</label>
+          <textarea id="ai-expense" className="text-input" maxLength={1000} value={aiText} onChange={e => { setAiText(e.target.value); setPreview(null); }} placeholder="I paid 800 for dinner with Alex and Sam, split equally" disabled={aiBusy || isSubmitting} />
+          <button type="button" className="btn btn-secondary" disabled={aiText.trim().length < 5 || aiBusy || isSubmitting} onClick={parseText}>{aiBusy ? 'Preparing preview...' : 'Preview with AI'}</button>
+          {preview && <div role="status" style={{ padding: 16 }}>
+            <h3>Review before saving</h3>
+            <p>{preview.description}: {group.currency} {preview.amount}</p>
+            <p>Paid by {preview.paid_by_name}. Split {preview.split_type} between {preview.participant_names.join(', ')}.</p>
+            {preview.splits.map(s => <p key={s.name}>{s.name}: {s.value}{preview.split_type === 'percent' ? '%' : ` ${group.currency}`}</p>)}
+            <button type="button" className="btn btn-primary" disabled={isSubmitting || aiBusy} onClick={savePreview}>Confirm &amp; save preview</button>
+            <button type="button" className="btn btn-secondary" disabled={isSubmitting} onClick={() => setPreview(null)}>Discard preview</button>
+          </div>}
+        </section>
         <form onSubmit={handleSubmit}>
           {/* Description */}
           <div className="form-group">
@@ -268,7 +307,7 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
                     fontFamily: 'var(--font-mono)',
                   }}
                 >
-                  $
+                  {currencySymbol(group.currency)}
                 </span>
                 <input
                   type="number"
@@ -302,7 +341,7 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
           {/* Split Strategy Tabs */}
           <div style={{ marginBottom: '18px' }}>
             <label className="form-label" style={{ marginBottom: '8px', display: 'block' }}>
-              Split Strategy
+              How to split
             </label>
             <div
               style={{
@@ -355,8 +394,8 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
                   </span>
                   <span className="caption font-mono" style={{ color: 'var(--color-primary)', fontWeight: 600 }}>
                     {amount > 0 && selectedUserIds.length > 0
-                      ? `$${(amount / selectedUserIds.length).toFixed(2)} / person`
-                      : '$0.00 / person'}
+                      ? `${formatMoney(amount / selectedUserIds.length, group.currency)} / person`
+                      : `${formatMoney(0, group.currency)} / person`}
                   </span>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -412,7 +451,7 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
                       fontWeight: 600,
                     }}
                   >
-                    Remaining: ${(amount - exactSum).toFixed(2)}
+                    Remaining: {formatMoney(amount - exactSum, group.currency)}
                   </span>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -433,7 +472,7 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
                             fontSize: '13px',
                           }}
                         >
-                          $
+                          {currencySymbol(group.currency)}
                         </span>
                         <input
                           type="number"

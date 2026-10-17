@@ -53,8 +53,9 @@ class UserService(IUserService):
         if await self._repo.exists_by_email(request.email):
             raise ConflictError("Email already exists")
 
-        hashed_bytes = bcrypt.hashpw(request.password.encode("utf-8"), bcrypt.gensalt())
-        hashed = hashed_bytes.decode("utf-8")
+        from modules.user.recovery import password_hash
+
+        hashed = password_hash(request.password)
         orm_user = UserORM(
             email=request.email,
             name=request.name,
@@ -68,8 +69,14 @@ class UserService(IUserService):
 
     async def authenticate(self, request: LoginRequest) -> AuthTokens:
         user = await self._repo.get_by_email(request.email)
-        if not user or not bcrypt.checkpw(
-            request.password.encode("utf-8"), user.hashed_password.encode("utf-8")
+        if len(request.password.encode("utf-8")) > 72:
+            raise AuthenticationError("Invalid email or password")
+        if (
+            not user
+            or user.deleted_at
+            or not bcrypt.checkpw(
+                request.password.encode("utf-8"), user.hashed_password.encode("utf-8")
+            )
         ):
             # Same error for not found and wrong password (no user enum)
             raise AuthenticationError("Invalid email or password")
@@ -95,7 +102,15 @@ class UserService(IUserService):
             if not user_id or not email:
                 raise AuthenticationError("Invalid token payload")
 
-            return self._generate_tokens(user_id, email)
+            user = await self._repo.get_by_id(user_id)
+            if not user or not user.is_active or user.deleted_at:
+                raise AuthenticationError("Account is unavailable")
+            if (
+                user.password_changed_at
+                and payload.get("iat", 0) <= user.password_changed_at.timestamp()
+            ):
+                raise AuthenticationError("Password changed. Please sign in again.")
+            return self._generate_tokens(user.id, user.email)
         except JWTError as err:
             raise AuthenticationError("Invalid or expired refresh token") from err
 
@@ -124,6 +139,8 @@ class UserService(IUserService):
             user.name = name
             await self._repo.update(user)
 
+        if not user.is_active or user.deleted_at:
+            raise AuthenticationError("Account is unavailable")
         tokens = self._generate_tokens(user.id, user.email)
         return User.model_validate(user), tokens
 
@@ -136,6 +153,7 @@ class UserService(IUserService):
             "email": email,
             "exp": access_exp,
             "type": "access",
+            "iat": now.timestamp(),
         }
         access_token = jwt.encode(
             access_payload, self._settings.jwt_secret, algorithm=self._settings.jwt_algorithm
@@ -147,6 +165,7 @@ class UserService(IUserService):
             "email": email,
             "exp": refresh_exp,
             "type": "refresh",
+            "iat": now.timestamp(),
         }
         refresh_token = jwt.encode(
             refresh_payload, self._settings.jwt_secret, algorithm=self._settings.jwt_algorithm

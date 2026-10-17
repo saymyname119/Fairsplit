@@ -22,7 +22,12 @@ def mock_session():
 
 @pytest.fixture
 def ledger_service(mock_session):
-    return LedgerService(mock_session)
+    mock_session.add = MagicMock()
+    service = LedgerService(mock_session)
+    service._repo.lock_group = AsyncMock(return_value=MagicMock(version=0))
+    service._repo.version = AsyncMock(return_value=0)
+    service._repo.find_retry = AsyncMock(return_value=None)
+    return service
 
 
 @pytest.mark.asyncio
@@ -160,4 +165,3 @@ async def test_isolated_transaction_context_manager(mock_session):
 
     mock_conn.execution_options.assert_called_once_with(isolation_level="SERIALIZABLE")
     mock_session.begin.assert_called_once()
-

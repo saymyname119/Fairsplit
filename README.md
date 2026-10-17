@@ -1,216 +1,181 @@
 # FairSplit
 
-> **A portfolio-grade expense splitting and debt simplification application — modular monolith, microservice-ready.**  
-> Built with Python · FastAPI · PostgreSQL · Redis · Claude AI · React · TypeScript
+FairSplit helps groups track shared expenses, see who owes what, and record payments.
+Use it for trips, shared homes, or everyday expenses with friends.
 
----
+## Features
 
-## What Is This?
+- Email/password accounts and Google sign-in through Supabase Auth.
+- Groups, member management, and invitations by email or shareable link.
+- Expenses with equal, exact-amount, or percentage splits.
+- Group currencies: USD, EUR, GBP, JPY, and INR.
+- Balances and suggested payments to simplify settling up.
+- Partial payments, payment history, and reversals.
+- AI expense previews that require confirmation before saving (optional).
+- Password recovery by email (optional).
 
-**FairSplit** is a modern expense sharing platform where groups can track shared expenses and simplify multi-party debts with greedy graph reduction algorithms. Built as a portfolio project demonstrating:
+FairSplit records payments; it does not transfer money. Each group uses one currency;
+there is no exchange-rate conversion. AI parsing and email delivery require the
+provider credentials described below.
 
-- **Modular monolith architecture** — clean module boundaries, designed for microservice extraction
-- **Design patterns** — Strategy (split algorithms), Observer (notifications), Facade (module interfaces)
-- **Event-driven design** — modules communicate via an event bus, not direct calls
-- **AI feature** — natural language expense parsing via Claude API (Prompt 4)
-- **Production-ready foundations** — Docker, CI/CD, Alembic migrations, Redis caching
+## Stack
 
----
+React, TypeScript, and Vite on the frontend; Python, FastAPI, SQLAlchemy, PostgreSQL,
+and Redis on the backend. Alembic manages schema migrations. Supabase provides
+optional Google authentication and can host the PostgreSQL database.
 
-## Architecture (High Level)
+## Run locally
 
-```mermaid
-graph TB
-    Client([Client])
+Requirements: Python 3.11+, Node.js 22.12+, PostgreSQL, and Redis.
+Docker Compose can supply the local database and cache.
 
-    subgraph App["FastAPI Application (Modular Monolith)"]
-        API[API Layer\nRoutes — thin, no business logic]
-        USER[User Module\nAuth & Profiles]
-        GROUP[Group Module\nMembership]
-        EXPENSE[Expense Module\nSplit Calculation]
-        LEDGER[Ledger Module\nBalance & Settlements]
-        AI[AI Module\nNLP Parsing]
-        NOTIF[Notification Module\nEvent-driven]
-        BUS[In-Process Event Bus\nIEventBus interface]
-    end
+### 1. Prepare the backend
 
-    DB[(PostgreSQL 15\n7 namespaced tables)]
-    CACHE[(Redis 7\nBalance cache)]
-    CLAUDE[Claude API\nclaude-sonnet-4-6]
+From the repository root:
 
-    Client --> API
-    API --> USER
-    API --> GROUP
-    API --> EXPENSE
-    API --> LEDGER
-    API --> AI
-    EXPENSE --> BUS
-    LEDGER --> BUS
-    BUS --> NOTIF
-    BUS --> LEDGER
-    BUS --> CACHE
-    AI --> CLAUDE
-    App --> DB
-    App --> CACHE
-```
-
----
-
-## Quick Start
-
-### Prerequisites
-- Docker & Docker Compose (V2)
-- Python 3.11+ (for local dev without Docker)
-- **Important:** Ensure ports `8000` (API), `5432` (Postgres), and `6379` (Redis) are free on your host machine before starting.
-
-### With Docker (Recommended)
-
-This is the fastest way to get the entire modular monolith and its infrastructure running.
-
-```bash
-# 1. Clone and enter the project
-git clone <repo> splitwise && cd splitwise
-
-# 2. Set up environment variables
-cp .env.example .env
-# Edit .env — at minimum set CLAUDE_API_KEY for Prompt 4 features
-
-# 3. Start all services
-# Note: The first build may take 2-3 minutes to compile gcc and libpq-dev. 
-# Subsequent builds will use the Docker cache and start instantly.
-docker compose up --build
-
-# 4. Run database migrations
-# In a separate terminal tab, apply the Alembic migrations to the running Postgres container
-docker compose exec app alembic upgrade head
-
-# 5. Verify everything is running
-curl http://localhost:8000/healthz
-# → {"status": "ok", "services": {"database": "ok", "redis": "ok"}}
-
-# 6. Open API docs
-# Navigate your browser to the interactive Swagger UI
-open http://localhost:8000/docs
-```
-
-### Local Development (Hybrid Approach)
-
-If you prefer to run the FastAPI server directly on your host machine while keeping the database and cache in Docker:
-
-```bash
-# 1. Create and activate a virtual environment
+```sh
 python -m venv .venv
-source .venv/bin/activate        # Linux/Mac
-.venv\Scripts\activate           # Windows
+```
 
-# 2. Install all dependencies (including dev)
-pip install -e ".[dev]"
+Activate the environment:
 
-# 3. Copy and configure .env
-cp .env.example .env
+```powershell
+# Windows PowerShell
+.\.venv\Scripts\Activate.ps1
+```
 
-# 4. Start Postgres and Redis infrastructure
-docker compose up postgres redis -d
+```sh
+# macOS / Linux
+source .venv/bin/activate
+```
 
-# 5. Run database migrations against the local Postgres container
+Install dependencies and copy `.env.example` to `.env`:
+
+```sh
+python -m pip install -e ".[dev]"
+```
+
+For local PostgreSQL and Redis:
+
+```sh
+docker compose up -d postgres redis
+```
+
+Set these values in the root `.env`:
+
+```dotenv
+ENVIRONMENT=development
+DATABASE_URL=postgresql+asyncpg://splitwise:splitwise@localhost:5432/splitwise
+REDIS_URL=redis://localhost:6379/0
+JWT_SECRET=replace-with-a-generated-secret
+APP_BASE_URL=http://127.0.0.1:5173
+```
+
+Generate a secret with `python -c "import secrets; print(secrets.token_hex(32))"`.
+For Supabase PostgreSQL, replace `DATABASE_URL` with your project's connection
+string using the `postgresql+asyncpg://` scheme. Redis is still required; start
+only the `redis` Compose service if you use a hosted database.
+
+Apply migrations and start the API:
+
+```sh
 alembic upgrade head
-
-# 6. Start the dev server with hot-reload
-uvicorn api.app:app --reload --port 8000
+uvicorn api.app:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-### Run Tests
+### 2. Start the frontend
 
-```bash
-pytest                         # all tests
-pytest tests/unit/             # unit tests only
-pytest tests/integration/      # integration tests only
-pytest -v --tb=short           # verbose output
+Copy `frontend/.env.example` to `frontend/.env` and set:
+
+```dotenv
+VITE_API_URL=http://127.0.0.1:8000
 ```
 
-### Lint and Typecheck
+In a separate terminal:
 
-```bash
-ruff check .                   # lint
-ruff format .                  # format
-mypy modules shared api        # type check
+```sh
+cd frontend
+npm install
+npm run dev -- --host 127.0.0.1
 ```
 
----
+Open [FairSplit](http://127.0.0.1:5173/). API documentation is available at
+[Swagger UI](http://127.0.0.1:8000/docs), and service health at
+[/healthz](http://127.0.0.1:8000/healthz).
 
-## Environment Variables
+## Optional services
 
-| Variable | Required | Description |
-|---|---|---|
-| `DATABASE_URL` | Yes | Postgres async URL (`postgresql+asyncpg://...`) |
-| `REDIS_URL` | Yes | Redis URL (`redis://localhost:6379/0`) |
-| `JWT_SECRET` | Yes | Secret for JWT signing — generate with `python -c "import secrets; print(secrets.token_hex(32))"` |
-| `CLAUDE_API_KEY` | Prompt 4 | Anthropic API key for NLP expense parsing |
-| `CLAUDE_MODEL` | No | Default: `claude-sonnet-4-6` |
-| `ENVIRONMENT` | No | `development` / `production` / `test` |
+### Google sign-in
 
----
+Enable the Google provider in Supabase Auth and configure its Google OAuth client.
+Allow your frontend URL in Supabase's authentication redirect settings.
 
-## API Endpoints
+Root `.env`:
 
-All endpoints documented at `http://localhost:8000/docs` (Swagger UI).
+```dotenv
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_PUBLISHABLE_KEY=your-publishable-key
+```
 
-| Method | Path | Description | Status |
-|---|---|---|---|
-| GET | `/healthz` | Infrastructure health check | ✅ Done |
-| POST | `/users/` | Register user | ✅ Done |
-| GET | `/users/:id` | Get user profile | ✅ Done |
-| GET | `/users/:id/balances` | User's total balances | ✅ Done |
-| POST | `/auth/login` | Authenticate | ✅ Done |
-| POST | `/auth/refresh` | Refresh access token | ✅ Done |
-| POST | `/groups/` | Create group | ✅ Done |
-| GET | `/groups/:id` | Get group details | ✅ Done |
-| POST | `/groups/:id/members` | Add member | ✅ Done |
-| DELETE | `/groups/:id/members/:userId` | Remove member | ✅ Done |
-| POST | `/groups/:id/expenses` | Create expense | ✅ Done |
-| GET | `/groups/:id/expenses` | List expenses (paginated) | ✅ Done |
-| GET | `/groups/:id/expenses/:id` | Get single expense | ✅ Done |
-| DELETE | `/groups/:id/expenses/:id` | Soft-delete expense | ✅ Done |
-| GET | `/groups/:id/balances` | Group balances (cached) | ✅ Done |
-| GET | `/groups/:id/balances/simplified` | Minimum settlement plan | ✅ Done |
-| POST | `/groups/:id/settle` | Record settlement | ✅ Done |
-| POST | `/groups/:id/expenses/parse` | NLP expense parsing | 🔲 Prompt 4 |
+`frontend/.env`:
 
----
+```dotenv
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
+```
 
-## Design Decisions Summary
+Use the same Supabase project on both sides. The backend verifies the Supabase
+access token before issuing an app session. Never put a service-role key or
+Google client secret in frontend settings. Restart services after changing settings.
 
-Full detail in [`docs/design-decisions.md`](docs/design-decisions.md).
+### AI expense previews
 
-| Decision | Choice | Why |
-|---|---|---|
-| Architecture | Modular monolith | Microservice complexity without microservice scale is waste |
-| Language | Python + FastAPI | Async-native, Pydantic domain models, Claude SDK first-class |
-| Money type | `DECIMAL(19, 4)` | Exact arithmetic — float is wrong for money |
-| Split algorithm | Strategy pattern | Open/Closed: adding a new split type = one new class |
-| Notifications | Observer + event bus | Decoupled from expense creation — failures don't block responses |
-| Balance cache | Write-invalidate | Staleness on money data = wrong balance shown; invalidation is safer |
-| AI output | Preview only | Never auto-commit ambiguous financial data |
-| Debt simplification | Greedy net-flow | O(N log N), minimum transactions, well-known interview algorithm |
+Set `CLAUDE_API_KEY` in the root `.env`; `CLAUDE_MODEL` selects the model.
+Choose **Preview with AI** in the expense dialog, review the payer, participants,
+amount, and split, then confirm to save. Manual entry works without an AI key.
 
----
+### Email invitations and password recovery
 
-## Project Status
+Configure either SMTP (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`,
+`SMTP_FROM_EMAIL`) or Resend (`RESEND_API_KEY`, `RESEND_FROM_EMAIL`) in the root
+`.env`. Set `APP_BASE_URL` to the frontend address used by recipients.
 
-This project is built across 5 prompts (Antigravity-powered development):
+Password reset links expire after 30 minutes and can be used once. A password
+change invalidates older app sessions. Without an email provider, password
+recovery is unavailable; invitation links can still be shared manually.
 
-- [x] **Prompt 1** — Scaffolding & Architecture
-- [x] **Prompt 2** — LLD: Domain classes, split strategies, ledger, tests
-- [x] **Prompt 3** — HLD: Full API, DB migrations, Redis caching, JWT auth
-- [x] **Prompt 5** — Polish: scaling docs, interview prep, architecture diagrams
-- [x] **Frontend** — Warm editorial web app built with React, Vite & Claude design system ([`design.md`](design.md))
-- [ ] **Prompt 4** *(optional)* — AI: Claude NLP parsing
+## Checks
 
----
+With the Python environment activated, from the repository root:
 
-## Documentation
+```sh
+pytest tests/unit
+node --test frontend/tests/session.test.mjs
+npm --prefix frontend run build
+```
 
-- [`docs/architecture.md`](docs/architecture.md) — Module map, sequence diagrams, ER diagram, cache flow
-- [`docs/design-decisions.md`](docs/design-decisions.md) — Every significant technical choice and why
-- [`docs/scaling.md`](docs/scaling.md) — How this handles 10M users *(Prompt 5)*
-- [`docs/interview-prep.md`](docs/interview-prep.md) — 5 hard questions + answers *(Prompt 5)*
+Database regression tests require a **disposable PostgreSQL database** migrated
+with `alembic upgrade head`. Set `DATABASE_URL` to that database while migrating,
+and set `FAIRSPLIT_TEST_DATABASE_URL` to its async connection string when testing:
+
+```sh
+pytest tests/integration/test_feature_completion.py tests/integration/test_financial_safety.py
+```
+
+These tests create records. Use a dedicated test database.
+
+## Project layout
+
+| Directory | Purpose |
+| --- | --- |
+| `frontend/` | React app and frontend session tests |
+| `api/` | FastAPI routes and authentication |
+| `modules/` | Users, groups, expenses, balances, notifications, and AI |
+| `shared/` | Configuration, database, cache, events, and errors |
+| `shared/db/migrations/` | Alembic schema migrations |
+| `tests/` | Backend unit and integration tests |
+| `docs/` | Architecture and implementation details |
+
+See [financial safety](docs/financial-safety.md) for payment idempotency, journal
+records, and concurrency checks, and [architecture](docs/architecture.md) for the
+module structure. Keep `.env` files out of version control.

@@ -41,7 +41,7 @@ export const GroupSelector: React.FC<GroupSelectorProps> = ({
               color: 'var(--color-ink)',
             }}
           >
-            Your Active Ledgers
+            Your groups
           </h2>
         </div>
         <button

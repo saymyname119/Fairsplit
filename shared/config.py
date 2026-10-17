@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     jwt_expiry_minutes: int = Field(default=60)
 
     # ── AI ────────────────────────────────────────────────────
+    supabase_url: str = Field(default="")
+    supabase_publishable_key: str = Field(default="")
+
     claude_api_key: str = Field(default="")
     claude_model: str = Field(default="claude-sonnet-4-6")
 

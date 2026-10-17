@@ -32,7 +32,7 @@ export const supabase = createClient(supabaseUrl, supabaseKey);
 export async function signInWithGoogle() {
   if (!isSupabaseConfigured()) {
     throw new Error(
-      'Google Sign-In requires Supabase credentials in frontend/.env. Please use email & password sign-in or the Quick Demo accounts below.'
+      'Google sign-in is unavailable. Please sign in with your email.'
     );
   }
   const { data, error } = await supabase.auth.signInWithOAuth({

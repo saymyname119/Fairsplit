@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth_dependency import get_current_user
+from api.routes.ledger import require_member
 from modules.expense import (
     CreateExpenseRequest,
     Expense,
@@ -15,10 +16,12 @@ from modules.expense import (
     UpdateExpenseRequest,
 )
 from modules.ledger import LedgerService
+from modules.ledger.repository import LedgerRepository
 from shared.db.session import get_db
+from shared.errors import NotFoundError
 from shared.events import ExpenseCreated, ExpenseSplitEvent
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_member)])
 
 
 @router.post(
@@ -40,6 +43,7 @@ async def create_expense(
     current_user: dict[str, Any] = Depends(get_current_user),
 ) -> Expense:
     """POST /groups/:id/expenses"""
+    await LedgerRepository(db).lock_group(group_id)
     service = ExpenseService(db)
     expense = await service.create_expense(group_id, request)
 
@@ -100,7 +104,10 @@ async def get_expense(
 ) -> Expense:
     """GET /groups/:id/expenses/:expense_id"""
     service = ExpenseService(db)
-    return await service.get_expense(expense_id)
+    expense = await service.get_expense(expense_id)
+    if expense.group_id != group_id:
+        raise NotFoundError("Expense", expense_id)
+    return expense
 
 
 @router.delete(
@@ -121,7 +128,11 @@ async def delete_expense(
 ) -> None:
     """DELETE /groups/:id/expenses/:id"""
     user_id = current_user.get("user_id") or current_user.get("sub", "")
+    await LedgerRepository(db).lock_group(group_id)
     service = ExpenseService(db)
+    existing = await service.get_expense(expense_id)
+    if existing.group_id != group_id:
+        raise NotFoundError("Expense", expense_id)
     await service.delete_expense(expense_id, user_id)
 
     # Recalculate group balances under row-level locks
@@ -148,7 +159,11 @@ async def update_expense(
 ) -> Expense:
     """PATCH /groups/:id/expenses/:expense_id"""
     user_id = current_user.get("user_id") or current_user.get("sub", "")
+    await LedgerRepository(db).lock_group(group_id)
     service = ExpenseService(db)
+    existing = await service.get_expense(expense_id)
+    if existing.group_id != group_id:
+        raise NotFoundError("Expense", expense_id)
     expense = await service.update_expense(expense_id, request, user_id)
 
     # Recalculate group balances under row-level locks
@@ -156,4 +171,3 @@ async def update_expense(
     await ledger_service.recalculate_group_balances(group_id)
 
     return expense
-

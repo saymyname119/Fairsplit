@@ -26,6 +26,7 @@ def _make_mock_group(group_id: str = "g1", name: str = "Test Group") -> GroupORM
 
     group = MagicMock(spec=GroupORM)
     group.id = group_id
+    group.currency = "INR"
     group.name = name
     group.description = "A test group"
     group.created_by_id = "user-1"

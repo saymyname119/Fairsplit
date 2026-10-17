@@ -4,14 +4,56 @@ from collections.abc import Sequence
 from decimal import Decimal
 
 from sqlalchemy import select, text
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from modules.ledger.models import LedgerBalanceORM, SettlementORM
+from modules.ledger.models import JournalORM, LedgerBalanceORM, LedgerStateORM, SettlementORM
 
 
 class LedgerRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def lock_group(self, group_id: str) -> LedgerStateORM:
+        # Lock a stable row even when the group has no pair balances yet.
+        await self._session.execute(
+            insert(LedgerStateORM)
+            .values(group_id=group_id, version=0)
+            .on_conflict_do_nothing(index_elements=["group_id"])
+        )
+        result = await self._session.execute(
+            select(LedgerStateORM)
+            .where(LedgerStateORM.group_id == group_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        return result.scalar_one()
+
+    async def version(self, group_id: str) -> int:
+        result = await self._session.execute(
+            select(LedgerStateORM.version).where(LedgerStateORM.group_id == group_id)
+        )
+        return result.scalar_one_or_none() or 0
+
+    async def find_retry(self, group_id: str, key: str) -> SettlementORM | None:
+        result = await self._session.execute(
+            select(SettlementORM).where(
+                SettlementORM.group_id == group_id, SettlementORM.idempotency_key == key
+            )
+        )
+        return result.scalar_one_or_none()
+
+    def journal(self, group_id: str, credit: str, debit: str, amount: Decimal, reason: str) -> None:
+        if amount:
+            self._session.add(
+                JournalORM(
+                    group_id=group_id,
+                    credit_user_id=credit,
+                    debit_user_id=debit,
+                    amount=amount,
+                    reason=reason,
+                )
+            )
 
     async def get_balance(
         self, group_id: str, creditor_id: str, debtor_id: str
@@ -39,9 +81,7 @@ class LedgerRepository:
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_group_balances_for_update(
-        self, group_id: str
-    ) -> Sequence[LedgerBalanceORM]:
+    async def get_group_balances_for_update(self, group_id: str) -> Sequence[LedgerBalanceORM]:
         """
         Pessimistic row-level lock on ALL existing balance rows for a group.
         Ordered deterministically by (creditor_id, debtor_id) to eliminate deadlocks.
@@ -96,9 +136,7 @@ class LedgerRepository:
         result = await self._session.execute(stmt)
         return result.scalars().all()
 
-    async def get_active_group_splits(
-        self, group_id: str
-    ) -> list[tuple[str, str, Decimal]]:
+    async def get_active_group_splits(self, group_id: str) -> list[tuple[str, str, Decimal]]:
         """
         Returns list of (payer_id, participant_user_id, owed_amount)
         for all non-deleted expenses in a group.
@@ -121,8 +159,7 @@ class LedgerRepository:
     async def get_user_balances(self, user_id: str) -> Sequence[LedgerBalanceORM]:
         """Get all balance rows where the user is either creditor or debtor."""
         stmt = select(LedgerBalanceORM).where(
-            (LedgerBalanceORM.creditor_id == user_id)
-            | (LedgerBalanceORM.debtor_id == user_id)
+            (LedgerBalanceORM.creditor_id == user_id) | (LedgerBalanceORM.debtor_id == user_id)
         )
         result = await self._session.execute(stmt)
         return result.scalars().all()
@@ -133,8 +170,7 @@ class LedgerRepository:
             select(LedgerBalanceORM.id)
             .where(
                 LedgerBalanceORM.group_id == group_id,
-                (LedgerBalanceORM.creditor_id == user_id)
-                | (LedgerBalanceORM.debtor_id == user_id),
+                (LedgerBalanceORM.creditor_id == user_id) | (LedgerBalanceORM.debtor_id == user_id),
                 LedgerBalanceORM.net_amount != 0,
             )
             .limit(1)

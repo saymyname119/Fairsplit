@@ -63,7 +63,7 @@ export const NewGroupModal: React.FC<NewGroupModalProps> = ({
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <div>
             <span className="caption-uppercase" style={{ color: 'var(--color-primary)' }}>
-              New Ledger
+              New group
             </span>
             <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '26px', marginTop: '2px' }}>
               Create Shared Group
@@ -90,7 +90,7 @@ export const NewGroupModal: React.FC<NewGroupModalProps> = ({
             }}
           >
             <div style={{ fontSize: '13px', color: '#b45309' }}>
-              <strong>Sign in required:</strong> You must be signed in to create and manage group ledgers.
+              <strong>Sign in required:</strong> You must be signed in to create and manage groups.
             </div>
             {onOpenAuth && (
               <button

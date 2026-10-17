@@ -33,6 +33,9 @@ class GroupORM(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "group_groups"
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    currency: Mapped[str] = mapped_column(
+        String(3), nullable=False, default="USD", server_default="USD"
+    )
     description: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     created_by_id: Mapped[str] = mapped_column(
         String(36),
@@ -107,6 +110,7 @@ class Group(BaseModel):
     id: str
     name: str
     description: str | None
+    currency: str = "USD"
     created_by_id: str
     created_at: datetime
     members: list[GroupMember] = Field(default_factory=list)
@@ -115,6 +119,7 @@ class Group(BaseModel):
 
 
 class CreateGroupRequest(BaseModel):
+    currency: str = Field(default="USD", pattern=r"^(USD|EUR|GBP|JPY|INR)$")
     name: str = Field(min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=1000)
 

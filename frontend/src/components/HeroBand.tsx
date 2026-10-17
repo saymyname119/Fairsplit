@@ -1,3 +1,4 @@
+import { formatMoney } from '../utils/currency';
 import React from 'react';
 import { ArrowUpRight, ArrowDownLeft, Receipt, Users, PlusCircle } from 'lucide-react';
 import type { Group, User } from '../api/client';
@@ -43,21 +44,13 @@ export const HeroBand: React.FC<HeroBandProps> = ({
         >
           {/* Left: Editorial Headline & Subtitle */}
           <div>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
-              <span className="badge badge-coral">MODULAR MONOLITH</span>
-              <span className="caption" style={{ color: 'var(--color-muted)' }}>
-                Exact Money Arithmetic • Write-Invalidate Cache
-              </span>
-            </div>
-
             <h1 className="display-lg" style={{ marginBottom: '16px', color: 'var(--color-ink)' }}>
               Expenses divided, <br />
               <span style={{ fontStyle: 'italic', color: 'var(--color-primary)' }}>friendships multiplied.</span>
             </h1>
 
             <p className="body-md" style={{ color: 'var(--color-body)', maxWidth: '520px', marginBottom: '28px' }}>
-              Track group travel, flatmate ledgers, and shared dinners with exact decimal arithmetic.
-              Greedy net-flow debt simplification guarantees minimum settlements.
+              Keep shared expenses organized, see who owes what, and settle up with your group.
             </p>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -86,7 +79,7 @@ export const HeroBand: React.FC<HeroBandProps> = ({
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <span className="caption-uppercase" style={{ color: 'var(--color-muted)' }}>
-                  Active Focus Group
+                  Current group
                 </span>
                 <h3
                   style={{
@@ -96,7 +89,7 @@ export const HeroBand: React.FC<HeroBandProps> = ({
                     marginTop: '2px',
                   }}
                 >
-                  {currentGroup ? currentGroup.name : 'All Groups'}
+                  {currentGroup ? currentGroup.name : 'No group selected'}
                 </h3>
               </div>
               <span className="badge badge-teal font-mono">
@@ -131,7 +124,7 @@ export const HeroBand: React.FC<HeroBandProps> = ({
                     <Receipt size={16} style={{ color: 'var(--color-muted)' }} />
                   )}
                   <span className="caption" style={{ color: 'var(--color-muted)' }}>
-                    {currentUser ? `${currentUser.name.split(' ')[0]}'s Net Position` : 'Your Net Position'}
+                    {currentUser ? `${currentUser.name.split(' ')[0]}'s balance` : 'Your balance'}
                   </span>
                 </div>
                 <div
@@ -142,7 +135,7 @@ export const HeroBand: React.FC<HeroBandProps> = ({
                     color: isOwed ? 'var(--color-success)' : owes ? 'var(--color-primary)' : 'var(--color-ink)',
                   }}
                 >
-                  {isOwed ? `+$${userNetBalance.toFixed(2)}` : owes ? `-$${Math.abs(userNetBalance).toFixed(2)}` : '$0.00'}
+                  {isOwed ? `+${formatMoney(userNetBalance, currentGroup?.currency)}` : formatMoney(userNetBalance, currentGroup?.currency)}
                 </div>
                 <div className="caption" style={{ color: 'var(--color-muted-soft)', marginTop: '2px' }}>
                   {isOwed ? 'You are owed' : owes ? 'You owe money' : 'Completely settled up'}
@@ -165,7 +158,7 @@ export const HeroBand: React.FC<HeroBandProps> = ({
                   </span>
                 </div>
                 <div className="font-mono" style={{ fontSize: '22px', fontWeight: 600, color: 'var(--color-ink)' }}>
-                  ${totalExpensesAmount.toFixed(2)}
+                  {formatMoney(totalExpensesAmount, currentGroup?.currency)}
                 </div>
                 <div className="caption" style={{ color: 'var(--color-muted-soft)', marginTop: '2px' }}>
                   Across {expensesCount} expenses

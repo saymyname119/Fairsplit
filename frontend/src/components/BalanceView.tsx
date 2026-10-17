@@ -1,12 +1,14 @@
+import { formatMoney } from '../utils/currency';
 import React, { useState } from 'react';
-import { ArrowRight, CheckCircle, RefreshCw, Zap } from 'lucide-react';
+import { ArrowRight, CheckCircle, RefreshCw } from 'lucide-react';
 import type { Group, SettlementTransaction } from '../api/client';
+import { SettlementHistory } from './SettlementHistory';
 
 interface BalanceViewProps {
   group: Group;
   balances: Record<string, number>;
   simplifiedDebts: SettlementTransaction[];
-  onSettle: (payerId: string, payeeId: string, amount: number) => void;
+  onSettle: (payerId: string, payeeId: string, amount: number, version: number, key: string) => Promise<void>;
   onRefresh: () => void;
 }
 
@@ -19,6 +21,11 @@ export const BalanceView: React.FC<BalanceViewProps> = ({
 }) => {
   const [selectedSettlement, setSelectedSettlement] = useState<SettlementTransaction | null>(null);
 
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentKey, setPaymentKey] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1.3fr', gap: '24px', marginBottom: '32px' }}>
       {/* Column 1: Net Ledger Balances */}
@@ -26,7 +33,7 @@ export const BalanceView: React.FC<BalanceViewProps> = ({
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <div>
             <span className="caption-uppercase" style={{ color: 'var(--color-muted)' }}>
-              Group Net Flow
+              Group balances
             </span>
             <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '22px', marginTop: '2px' }}>
               Individual Balances
@@ -35,7 +42,7 @@ export const BalanceView: React.FC<BalanceViewProps> = ({
           <button
             onClick={onRefresh}
             className="btn-icon-circular"
-            title="Refresh Ledger Cache"
+            title="Refresh balances"
             aria-label="Refresh balances"
           >
             <RefreshCw size={14} />
@@ -97,7 +104,7 @@ export const BalanceView: React.FC<BalanceViewProps> = ({
                       color: isOwed ? 'var(--color-success)' : owes ? 'var(--color-primary)' : 'var(--color-muted)',
                     }}
                   >
-                    {isOwed ? `+$${bal.toFixed(2)}` : owes ? `-$${Math.abs(bal).toFixed(2)}` : '$0.00'}
+                    {isOwed ? `+${formatMoney(bal, group.currency)}` : formatMoney(bal, group.currency)}
                   </div>
                   <div className="caption" style={{ color: 'var(--color-muted)', fontSize: '11px' }}>
                     {isOwed ? 'gets back' : owes ? 'owes into pool' : 'settled'}
@@ -113,17 +120,8 @@ export const BalanceView: React.FC<BalanceViewProps> = ({
       <div className="card-cream" style={{ padding: '24px', position: 'relative' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <div>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-              <span className="badge badge-amber font-mono" style={{ fontSize: '10px' }}>
-                <Zap size={11} />
-                GREEDY NET-FLOW
-              </span>
-              <span className="caption" style={{ color: 'var(--color-muted)', fontSize: '12px' }}>
-                O(N log N)
-              </span>
-            </div>
             <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '22px', marginTop: '4px' }}>
-              Simplified Settlement Plan
+              Suggested payments
             </h3>
           </div>
           <span className="badge badge-cream">
@@ -190,10 +188,10 @@ export const BalanceView: React.FC<BalanceViewProps> = ({
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <span className="font-mono" style={{ fontSize: '16px', fontWeight: 600, color: 'var(--color-ink)' }}>
-                    ${tx.amount.toFixed(2)}
+                    {formatMoney(tx.amount, group.currency)}
                   </span>
                   <button
-                    onClick={() => setSelectedSettlement(tx)}
+                    onClick={() => { setSelectedSettlement(tx); setPaymentAmount(String(tx.amount)); setPaymentKey(crypto.randomUUID()); setError(''); }}
                     className="btn btn-secondary"
                     style={{ height: '30px', padding: '0 10px', fontSize: '12px' }}
                   >
@@ -216,37 +214,52 @@ export const BalanceView: React.FC<BalanceViewProps> = ({
             lineHeight: 1.5,
           }}
         >
-          💡 <strong>Why simplification?</strong> Instead of everyone paying everyone back for each individual receipt,
-          our algorithm collapses all cyclic debts into the absolute minimum number of direct wire transfers.
+          Pay the suggested amounts to settle your group’s balances.
         </div>
       </div>
 
+      <SettlementHistory group={group} revision={simplifiedDebts} onRefresh={onRefresh} />
+
       {/* Settle Up Confirmation Modal */}
       {selectedSettlement && (
-        <div className="modal-overlay" onClick={() => setSelectedSettlement(null)}>
+        <div className="modal-overlay" onClick={() => { if (!saving) setSelectedSettlement(null); }}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ padding: '28px' }}>
             <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '24px', marginBottom: '8px' }}>
               Confirm Settlement
             </h3>
             <p className="body-md" style={{ color: 'var(--color-body)', marginBottom: '20px' }}>
               Record transfer of{' '}
-              <strong className="font-mono">${selectedSettlement.amount.toFixed(2)}</strong> from{' '}
+              <strong className="font-mono">{formatMoney(selectedSettlement.amount, group.currency)}</strong> from{' '}
               <strong>{selectedSettlement.from_user_name}</strong> to{' '}
               <strong>{selectedSettlement.to_user_name}</strong>?
             </p>
 
+            <label>Payment amount (partial payments supported)
+              <input aria-label="Payment amount" type="number" min="0.0001" step="0.0001"
+                max={selectedSettlement.amount} value={paymentAmount} disabled={saving}
+                onChange={e => { setPaymentAmount(e.target.value); setPaymentKey(crypto.randomUUID()); }} />
+            </label>
+            {error && <p role="alert">{error}</p>}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <button onClick={() => setSelectedSettlement(null)} className="btn btn-secondary">
+              <button disabled={saving} onClick={() => setSelectedSettlement(null)} className="btn btn-secondary">
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  onSettle(
-                    selectedSettlement.from_user_id,
-                    selectedSettlement.to_user_id,
-                    selectedSettlement.amount
-                  );
-                  setSelectedSettlement(null);
+                disabled={saving}
+                onClick={async () => {
+                  const amount = Number(paymentAmount);
+                  if (!Number.isFinite(amount) || amount <= 0 || amount > selectedSettlement.amount) {
+                    setError('Enter a positive amount within the outstanding payment.'); return;
+                  }
+                  setSaving(true); setError('');
+                  try {
+                    await onSettle(selectedSettlement.from_user_id, selectedSettlement.to_user_id,
+                      amount, selectedSettlement.version, paymentKey);
+                    setSelectedSettlement(null);
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : 'Payment failed. Please retry.');
+                    onRefresh();
+                  } finally { setSaving(false); }
                 }}
                 className="btn btn-primary"
               >

@@ -10,7 +10,7 @@ import {
   type SplitStrategy,
   type SplitItem,
 } from './api/client';
-import { supabase, onAuthStateChange, signOutSupabase, type Session } from './utils/supabase';
+import { onAuthStateChange, signOutSupabase, type Session } from './utils/supabase';
 import { TopNav } from './components/TopNav';
 import { HeroBand } from './components/HeroBand';
 import { GroupSelector } from './components/GroupSelector';
@@ -22,9 +22,17 @@ import { NewGroupModal } from './components/NewGroupModal';
 import { AddMemberModal } from './components/AddMemberModal';
 import { AcceptInvitationModal } from './components/AcceptInvitationModal';
 import { AuthModal } from './components/AuthModal';
+import { PasswordRecovery } from './components/PasswordRecovery';
 import { Footer } from './components/Footer';
 
 export const App: React.FC = () => {
+  const [recovery, setRecovery] = useState<{ token: string | null } | null>(() => {
+    const url = new URL(window.location.href);
+    const token = url.searchParams.get('reset_token');
+    if (!token) return null;
+    return { token };
+  });
+  const [authError, setAuthError] = useState('');
   const [isDark, toggleDark] = useDarkMode();
 
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -52,6 +60,13 @@ export const App: React.FC = () => {
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!recovery?.token) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete('reset_token');
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+  }, [recovery]);
+
   // Check URL for invitation token (?token=xxx or /invite/accept?token=xxx)
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -77,66 +92,35 @@ export const App: React.FC = () => {
     init();
   }, [currentUser]);
 
-  // ── Supabase Auth State Listener ──────────────────────────────────────
-  // Listens for Google OAuth redirects, session refresh, and sign-outs.
+  // Exchange only a verified Supabase access token for the app session.
   useEffect(() => {
-    // Check for existing session on mount
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    let cancelled = false;
+    let sequence = 0;
+    let controller: AbortController | null = null;
+    const sync = async (session: Session | null) => {
+      const request = ++sequence;
+      controller?.abort();
+      if (!session) return;
+      controller = new AbortController();
+      const signal = controller.signal;
       setSupabaseSession(session);
-      if (session?.user) {
-        const meta = session.user.user_metadata;
-        const name = meta?.full_name || meta?.name || session.user.email?.split('@')[0] || 'User';
-        const avatarUrl = meta?.avatar_url || meta?.picture;
-
-        api.syncOAuthUser(session.user.email || '', name, avatarUrl).then((syncedUser) => {
-          setCurrentUser(syncedUser);
-          localStorage.setItem('sw_current_user', JSON.stringify(syncedUser));
-          api.getGroups().then((fetched) => setGroups(fetched));
-        }).catch((err) => {
-          console.warn('OAuth sync with backend failed, using session user:', err);
-          const userObj: User = {
-            id: session.user.id,
-            name,
-            email: session.user.email || '',
-            avatar_url: avatarUrl,
-          };
-          setCurrentUser(userObj);
-          localStorage.setItem('sw_current_user', JSON.stringify(userObj));
-        });
-      }
-    });
-
-    // Subscribe to future auth changes (OAuth callback, sign-out, etc.)
-    const unsubscribe = onAuthStateChange((session, user) => {
-      setSupabaseSession(session);
-      if (session && user) {
-        const meta = user.user_metadata;
-        const name = meta?.full_name || meta?.name || user.email?.split('@')[0] || 'User';
-        const avatarUrl = meta?.avatar_url || meta?.picture;
-
-        api.syncOAuthUser(user.email || '', name, avatarUrl).then((syncedUser) => {
-          setCurrentUser(syncedUser);
-          localStorage.setItem('sw_current_user', JSON.stringify(syncedUser));
-          api.getGroups().then((fetched) => setGroups(fetched));
-        }).catch((err) => {
-          console.warn('OAuth sync with backend failed, using session user:', err);
-          const userObj: User = {
-            id: user.id,
-            name,
-            email: user.email || '',
-            avatar_url: avatarUrl,
-          };
-          setCurrentUser(userObj);
-          localStorage.setItem('sw_current_user', JSON.stringify(userObj));
-        });
-      } else if (!session) {
+      try {
+        const user = await api.syncOAuthUser(session.access_token, signal);
+        if (cancelled || request !== sequence || signal.aborted) return;
+        setCurrentUser(user);
+        localStorage.setItem('sw_current_user', JSON.stringify(user));
+      } catch (err) {
+        if (cancelled || request !== sequence || signal.aborted) return;
         api.clearToken();
-        localStorage.removeItem('sw_current_user');
         setCurrentUser(null);
+        localStorage.removeItem('sw_current_user');
+        setAuthError(err instanceof Error ? err.message : 'Google sign-in could not be verified. Please try again.');
       }
-    });
-
-    return unsubscribe;
+    };
+    const unsubscribe = onAuthStateChange((session) => { void sync(session); });
+    const expired = () => { setCurrentUser(null); setGroups([]); setExpenses([]); setSelectedGroupId(''); setAuthError('Your session expired. Please sign in again.'); setIsAuthModalOpen(true); };
+    window.addEventListener('fairsplit:session-expired', expired);
+    return () => { cancelled = true; controller?.abort(); unsubscribe(); window.removeEventListener('fairsplit:session-expired', expired); };
   }, []);
 
   // When selected group changes, load its data
@@ -215,7 +199,7 @@ export const App: React.FC = () => {
   const handleCreateGroup = async (name: string, currency: string) => {
     if (!currentUser || !api.hasToken()) {
       setIsAuthModalOpen(true);
-      throw new Error('Please sign in or create an account to create a shared ledger.');
+      throw new Error('Sign in to create a group.');
     }
     const newGrp = await api.createGroup(name, currency, currentUser.id);
     setGroups([newGrp, ...groups]);
@@ -223,13 +207,13 @@ export const App: React.FC = () => {
   };
 
   // Record Settlement Handler
-  const handleSettle = async (payerId: string, payeeId: string, amount: number) => {
+  const handleSettle = async (payerId: string, payeeId: string, amount: number, version: number, key: string) => {
     if (!currentUser || !api.hasToken()) {
       setIsAuthModalOpen(true);
       return;
     }
     if (!selectedGroupId || !currentGroup) return;
-    await api.recordSettlement(selectedGroupId, payerId, payeeId, amount, currentGroup.currency);
+    await api.recordSettlement(selectedGroupId, payerId, payeeId, amount, currentGroup.currency, version, key);
     const updatedExpenses = await api.getExpenses(selectedGroupId);
     setExpenses(updatedExpenses);
     await refreshBalances();
@@ -342,7 +326,7 @@ export const App: React.FC = () => {
             className={`segmented-btn ${activeTab === 'overview' ? 'active' : ''}`}
             onClick={() => setActiveTab('overview')}
           >
-            Ledger Overview
+            Overview
           </button>
           <button
             className={`segmented-btn ${activeTab === 'balances' ? 'active' : ''}`}
@@ -363,7 +347,7 @@ export const App: React.FC = () => {
           <>
             {activeTab === 'overview' && (
               <>
-                <BalanceView
+                <BalanceView key={currentGroup.id}
                   group={currentGroup}
                   balances={balances}
                   simplifiedDebts={simplifiedDebts}
@@ -380,7 +364,7 @@ export const App: React.FC = () => {
             )}
 
             {activeTab === 'balances' && (
-              <BalanceView
+              <BalanceView key={currentGroup.id}
                 group={currentGroup}
                 balances={balances}
                 simplifiedDebts={simplifiedDebts}
@@ -410,24 +394,24 @@ export const App: React.FC = () => {
             }}
           >
             <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--color-primary)', marginBottom: '8px' }}>
-              No ledger selected
+              No group selected
             </h3>
             <p style={{ fontSize: '14px', color: 'var(--color-secondary)', maxWidth: '440px', margin: '0 auto 20px' }}>
-              Create your first shared group ledger or sign in to collaborate with your team and split expenses seamlessly.
+              Sign in and create a group to start sharing expenses.
             </p>
             <button
               className="btn btn-primary"
               onClick={handleOpenNewGroup}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
             >
-              + Create Ledger
+              + Create Group
             </button>
           </div>
         )}
       </main>
 
       {/* Footer & Pre-footer Callout */}
-      <Footer onOpenNewExpense={handleOpenNewExpense} />
+      <Footer />
 
       {/* Modals */}
       {currentGroup && (
@@ -485,7 +469,10 @@ export const App: React.FC = () => {
         />
       )}
 
+      {authError && <div role="alert" style={{ padding: 16, color: 'var(--color-error)' }}>{authError}<button onClick={() => setAuthError('')}>Dismiss</button></div>}
+      {recovery && <PasswordRecovery token={recovery.token} onClose={() => { setRecovery(null); setIsAuthModalOpen(true); }} />}
       <AuthModal
+        onForgotPassword={() => { setIsAuthModalOpen(false); setRecovery({ token: null }); }}
         isOpen={isAuthModalOpen}
         currentUser={currentUser}
         supabaseSession={supabaseSession}

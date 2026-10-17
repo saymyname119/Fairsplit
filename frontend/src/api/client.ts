@@ -5,6 +5,13 @@
 
 export type SplitStrategy = 'EQUAL' | 'EXACT' | 'PERCENTAGE' | 'SHARE';
 
+export interface ExpensePreview {
+  amount: string; description: string; paid_by_id: string; paid_by_name: string;
+  participant_ids: string[]; participant_names: string[];
+  split_type: 'equal' | 'exact' | 'percent';
+  splits: Array<{ name: string; value: string }>;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -49,6 +56,7 @@ export interface Expense {
 }
 
 export interface SettlementTransaction {
+  version: number;
   from_user_id: string;
   from_user_name: string;
   to_user_id: string;
@@ -105,7 +113,7 @@ export class ApiClient {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 5000);
-      const res = await fetch(`${API_BASE}/healthz`, {
+      const res = await this.request(`${API_BASE}/healthz`, {
         method: 'GET',
         signal: controller.signal,
       });
@@ -117,33 +125,95 @@ export class ApiClient {
     }
   }
 
-  async syncOAuthUser(email: string, name: string, avatarUrl?: string): Promise<User> {
-    const res = await fetch(`${API_BASE}/auth/oauth-sync`, {
+  async syncOAuthUser(accessToken: string, signal?: AbortSignal): Promise<User> {
+    const res = await this.request(`${API_BASE}/auth/oauth-sync`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, name, avatar_url: avatarUrl }),
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal,
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: 'OAuth synchronization failed' }));
-      throw new Error(err.detail || 'OAuth synchronization failed');
+      throw new Error(err.message || err.detail || 'OAuth synchronization failed');
     }
     const data = await res.json();
-    this.setToken(data.tokens.access_token);
+    signal?.throwIfAborted();
+    this.setToken(data.tokens.access_token, data.tokens.refresh_token);
     return data.user as User;
   }
 
-  setToken(token: string) {
+  setToken(token: string, refreshToken?: string) {
+    this.sessionGeneration++;
+    this.storeTokens(token, refreshToken);
+  }
+
+  private storeTokens(token: string, refreshToken?: string) {
+    if (refreshToken) localStorage.setItem('sw_refresh_token', refreshToken);
     this.token = token;
     localStorage.setItem('sw_token', token);
   }
 
   clearToken() {
+    this.sessionGeneration++;
     this.token = null;
+    localStorage.removeItem('sw_refresh_token');
     localStorage.removeItem('sw_token');
   }
 
   hasToken(): boolean {
     return !!this.token;
+  }
+
+  private refreshing: Promise<boolean> | null = null;
+  private sessionGeneration = 0;
+
+  private async renewSession(): Promise<boolean> {
+    if (this.refreshing) return this.refreshing;
+    const generation = this.sessionGeneration;
+    const refreshToken = localStorage.getItem('sw_refresh_token');
+    if (!refreshToken) return false;
+    this.refreshing = (async () => {
+      const response = await fetch(`${API_BASE}/auth/refresh`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+      if (response.status >= 500) throw new Error('Session renewal is temporarily unavailable. Please try again.');
+      if (!response.ok) return false;
+      const tokens = await response.json();
+      if (generation !== this.sessionGeneration) return false;
+      this.storeTokens(tokens.access_token, tokens.refresh_token);
+      return true;
+    })().finally(() => { this.refreshing = null; });
+    return this.refreshing;
+  }
+
+  private async request(url: string, options: RequestInit = {}): Promise<Response> {
+    const headers = new Headers(options.headers);
+    const usedToken = this.token;
+    const generation = this.sessionGeneration;
+    const authenticated = headers.get('Authorization') === `Bearer ${usedToken}` && !!usedToken;
+    const response = await fetch(url, options);
+    if (response.status !== 401 || !authenticated || generation !== this.sessionGeneration) return response;
+    const renewed = this.token !== usedToken || await this.renewSession();
+    if (generation !== this.sessionGeneration) return response;
+    if (renewed) {
+      headers.set('Authorization', `Bearer ${this.token}`);
+      const retry = await fetch(url, { ...options, headers });
+      if (retry.status !== 401 || generation !== this.sessionGeneration) return retry;
+    }
+    this.clearToken();
+    localStorage.removeItem('sw_current_user');
+    window.dispatchEvent(new Event('fairsplit:session-expired'));
+    return response;
+  }
+
+  async parseExpense(groupId: string, text: string): Promise<ExpensePreview> {
+    const response = await this.request(`${API_BASE}/groups/${groupId}/expenses/parse`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...this.authHeaders() },
+      body: JSON.stringify({ text }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || data.detail || 'Could not parse expense');
+    return data.preview;
   }
 
   private authHeaders(): HeadersInit {
@@ -152,7 +222,7 @@ export class ApiClient {
 
   async getGroups(): Promise<Group[]> {
     try {
-      const res = await fetch(`${API_BASE}/groups/`, {
+      const res = await this.request(`${API_BASE}/groups/`, {
         headers: this.authHeaders(),
       });
       if (!res.ok) return [];
@@ -180,13 +250,13 @@ export class ApiClient {
   }
 
   async createGroup(name: string, currency: string, createdBy: string): Promise<Group> {
-    const res = await fetch(`${API_BASE}/groups/`, {
+    const res = await this.request(`${API_BASE}/groups/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...this.authHeaders(),
       },
-      body: JSON.stringify({ name, description: `Currency: ${currency}` }),
+      body: JSON.stringify({ name, currency }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: 'Failed to create group' }));
@@ -213,7 +283,7 @@ export class ApiClient {
 
   async getExpenses(groupId: string): Promise<Expense[]> {
     try {
-      const res = await fetch(`${API_BASE}/groups/${groupId}/expenses`, {
+      const res = await this.request(`${API_BASE}/groups/${groupId}/expenses`, {
         headers: this.authHeaders(),
       });
       if (!res.ok) return [];
@@ -223,7 +293,7 @@ export class ApiClient {
         group_id: exp.group_id,
         description: exp.description,
         amount: parseFloat(exp.amount) || 0,
-        currency: 'USD',
+        currency: exp.currency || 'USD',
         paid_by_id: exp.paid_by_id,
         split_strategy: (exp.split_type === 'percent' ? 'PERCENTAGE' : exp.split_type === 'exact' ? 'EXACT' : 'EQUAL') as SplitStrategy,
         splits: (exp.splits || []).map((s: any) => ({
@@ -248,7 +318,7 @@ export class ApiClient {
     };
     const split_type = splitTypeMap[expense.split_strategy] || 'equal';
     const participants = Array.from(
-      new Set([expense.paid_by_id, ...expense.splits.map((s) => s.user_id)])
+      new Set(expense.splits.map((s) => s.user_id))
     );
     const backendSplits = expense.splits.map((s) => ({
       user_id: s.user_id,
@@ -264,7 +334,7 @@ export class ApiClient {
       splits: split_type === 'equal' ? undefined : backendSplits,
     };
 
-    const res = await fetch(`${API_BASE}/groups/${expense.group_id}/expenses`, {
+    const res = await this.request(`${API_BASE}/groups/${expense.group_id}/expenses`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -282,7 +352,7 @@ export class ApiClient {
       group_id: data.group_id,
       description: data.description,
       amount: parseFloat(data.amount) || expense.amount,
-      currency: expense.currency || 'USD',
+      currency: data.currency || expense.currency || 'USD',
       paid_by_id: data.paid_by_id,
       split_strategy: expense.split_strategy,
       splits: Array.isArray(data.splits)
@@ -293,7 +363,7 @@ export class ApiClient {
   }
 
   async deleteExpense(expenseId: string, groupId: string): Promise<void> {
-    const res = await fetch(`${API_BASE}/groups/${groupId}/expenses/${expenseId}`, {
+    const res = await this.request(`${API_BASE}/groups/${groupId}/expenses/${expenseId}`, {
       method: 'DELETE',
       headers: this.authHeaders(),
     });
@@ -310,7 +380,7 @@ export class ApiClient {
     split_strategy?: SplitStrategy;
     splits?: SplitItem[];
   }): Promise<Expense> {
-    const res = await fetch(`${API_BASE}/groups/${groupId}/expenses/${expenseId}`, {
+    const res = await this.request(`${API_BASE}/groups/${groupId}/expenses/${expenseId}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -333,7 +403,7 @@ export class ApiClient {
       group_id: data.group_id || groupId,
       description: data.description || updates.description || '',
       amount: parseFloat(data.amount) || updates.amount || 0,
-      currency: 'USD',
+      currency: data.currency || 'USD',
       paid_by_id: data.paid_by_id || updates.paid_by_id || '',
       split_strategy: updates.split_strategy || 'EQUAL',
       splits: updates.splits || [],
@@ -343,7 +413,7 @@ export class ApiClient {
 
   async getBalances(groupId: string): Promise<Record<string, number>> {
     try {
-      const res = await fetch(`${API_BASE}/groups/${groupId}/balances`, {
+      const res = await this.request(`${API_BASE}/groups/${groupId}/balances`, {
         headers: this.authHeaders(),
       });
       if (res.ok) {
@@ -368,19 +438,20 @@ export class ApiClient {
 
   async getSimplifiedDebts(groupId: string): Promise<SettlementTransaction[]> {
     try {
-      const res = await fetch(`${API_BASE}/groups/${groupId}/balances/simplified`, {
+      const res = await this.request(`${API_BASE}/groups/${groupId}/balances/simplified`, {
         headers: this.authHeaders(),
       });
       if (res.ok) {
         const raw = await res.json();
         const list = Array.isArray(raw) ? raw : (raw.simplified || []);
         return list.map((item: any) => ({
+          version: raw.version,
           from_user_id: item.from_user_id,
           from_user_name: item.from_user_name || item.from_user_id,
           to_user_id: item.to_user_id,
           to_user_name: item.to_user_name || item.to_user_id,
           amount: parseFloat(item.amount) || 0,
-          currency: 'USD',
+          currency: raw.currency || 'USD',
         }));
       }
     } catch (err) {
@@ -389,8 +460,8 @@ export class ApiClient {
     return [];
   }
 
-  async recordSettlement(groupId: string, payerId: string, payeeId: string, amount: number, _currency: string) {
-    const res = await fetch(`${API_BASE}/groups/${groupId}/settle`, {
+  async recordSettlement(groupId: string, payerId: string, payeeId: string, amount: number, _currency: string, version: number, key: string) {
+    const res = await this.request(`${API_BASE}/groups/${groupId}/settle`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -401,6 +472,8 @@ export class ApiClient {
         to_user_id: payeeId,
         amount,
         notes: 'Settlement payment',
+        expected_version: version,
+        idempotency_key: key,
       }),
     });
     if (!res.ok) {
@@ -410,8 +483,38 @@ export class ApiClient {
     return await res.json();
   }
 
+  async getNotifications(groupId: string): Promise<Array<{ id: string; title: string; body: string }>> {
+    const res = await this.request(`${API_BASE}/groups/${groupId}/notifications`, { headers: this.authHeaders() });
+    if (!res.ok) throw new Error('Could not load notifications');
+    return res.json();
+  }
+
+  async getSettlementHistory(groupId: string): Promise<Array<{ id: string; from_user_id: string; to_user_id: string; amount: string; reversal_of: string | null }>> {
+    const res = await this.request(`${API_BASE}/groups/${groupId}/settlements`, { headers: this.authHeaders() });
+    if (!res.ok) throw new Error('Could not load payment history');
+    return res.json();
+  }
+
+  async reverseSettlement(groupId: string, id: string, version: number, key: string) {
+    const res = await this.request(`${API_BASE}/groups/${groupId}/settlements/${id}/reverse`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...this.authHeaders() },
+      body: JSON.stringify({ expected_version: version, idempotency_key: key }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Could not reverse payment');
+    }
+    return res.json();
+  }
+
+  async getBalanceVersion(groupId: string): Promise<number> {
+    const res = await this.request(`${API_BASE}/groups/${groupId}/balances/simplified`, { headers: this.authHeaders() });
+    if (!res.ok) throw new Error('Could not load current balances');
+    return (await res.json()).version;
+  }
+
   async addMember(groupId: string, name: string, email: string): Promise<Group | null> {
-    const res = await fetch(`${API_BASE}/groups/${groupId}/members`, {
+    const res = await this.request(`${API_BASE}/groups/${groupId}/members`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -439,7 +542,7 @@ export class ApiClient {
   }
 
   async removeMember(groupId: string, userId: string): Promise<boolean> {
-    const res = await fetch(`${API_BASE}/groups/${groupId}/members/${userId}`, {
+    const res = await this.request(`${API_BASE}/groups/${groupId}/members/${userId}`, {
       method: 'DELETE',
       headers: this.authHeaders(),
     });
@@ -448,7 +551,7 @@ export class ApiClient {
 
   async sendInvitation(groupId: string, email: string): Promise<Invitation> {
     const normalizedEmail = email.trim().toLowerCase();
-    const res = await fetch(`${API_BASE}/groups/${groupId}/invitations`, {
+    const res = await this.request(`${API_BASE}/groups/${groupId}/invitations`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -466,7 +569,7 @@ export class ApiClient {
   }
 
   async getPendingInvitations(groupId: string): Promise<Invitation[]> {
-    const res = await fetch(`${API_BASE}/groups/${groupId}/invitations`, {
+    const res = await this.request(`${API_BASE}/groups/${groupId}/invitations`, {
       headers: this.authHeaders(),
     });
     if (!res.ok) return [];
@@ -474,7 +577,7 @@ export class ApiClient {
   }
 
   async getInvitationInfo(token: string): Promise<InvitationInfo> {
-    const res = await fetch(`${API_BASE}/invitations/info/${token}`);
+    const res = await this.request(`${API_BASE}/invitations/info/${token}`);
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: 'Invitation not found or expired' }));
       throw new Error(err.detail || 'Invitation not found');
@@ -491,7 +594,7 @@ export class ApiClient {
     refresh_token?: string;
     user?: { id: string; name: string; email: string };
   }> {
-    const res = await fetch(`${API_BASE}/invitations/accept`, {
+    const res = await this.request(`${API_BASE}/invitations/accept`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token }),
@@ -506,7 +609,7 @@ export class ApiClient {
   }
 
   async cancelInvitation(invitationId: string): Promise<boolean> {
-    const res = await fetch(`${API_BASE}/invitations/${invitationId}`, {
+    const res = await this.request(`${API_BASE}/invitations/${invitationId}`, {
       method: 'DELETE',
       headers: this.authHeaders(),
     });

@@ -19,7 +19,8 @@ from sqlalchemy import engine_from_config, pool
 
 from modules.expense.models import ExpenseORM, SplitORM  # noqa: F401
 from modules.group.models import GroupMemberORM, GroupORM  # noqa: F401
-from modules.ledger.models import LedgerBalanceORM, SettlementORM  # noqa: F401
+from modules.ledger.models import JournalORM, LedgerBalanceORM, LedgerStateORM, SettlementORM
+from modules.notification.outbox import NotificationJobORM, NotificationORM  # noqa: F401
 
 # Import all ORM models so their tables appear in metadata
 from modules.user.models import UserORM  # noqa: F401

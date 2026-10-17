@@ -73,3 +73,6 @@ frontend/dist/
 .parcel-cache/
 uv.lock
 
+
+# Disposable PostgreSQL test cluster
+.test-postgres*/

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import abc
 from collections.abc import Sequence
+from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -39,7 +40,6 @@ class IExpenseService(abc.ABC):
     async def update_expense(
         self, expense_id: str, request: UpdateExpenseRequest, updated_by_id: str
     ) -> Expense: ...
-
 
 
 class ExpenseService(IExpenseService):
@@ -109,6 +109,7 @@ class ExpenseService(IExpenseService):
         domain_expense = Expense(
             id=orm_expense.id,
             group_id=group_id,
+            currency=group.currency,
             paid_by_id=request.paid_by_id,
             amount=request.amount,
             description=request.description,
@@ -165,6 +166,16 @@ class ExpenseService(IExpenseService):
         if request.description is not None:
             expense_orm.description = request.description
         if request.amount is not None:
+            # Preserve unequal proportions, with the final share absorbing rounding.
+            total = Decimal("0")
+            for split in split_orms[:-1]:
+                split.owed_amount = (
+                    split.owed_amount * request.amount / expense_orm.amount
+                ).quantize(Decimal("0.0001"))
+                total += split.owed_amount
+            split_orms[-1].owed_amount = request.amount - total
+            if any(s.owed_amount < 0 for s in split_orms):
+                raise DomainError("Amount is too small for these splits")
             expense_orm.amount = request.amount
         if request.paid_by_id is not None:
             is_member = await self._group_repo.is_member(expense_orm.group_id, request.paid_by_id)
@@ -175,17 +186,17 @@ class ExpenseService(IExpenseService):
             expense_orm.notes = request.notes
 
         await self._session.flush()
-        return self._map_to_domain(expense_orm, split_orms)
+        group = await self._group_repo.get_by_id_or_raise(expense_orm.group_id)
+        return self._map_to_domain(expense_orm, split_orms, group.currency)
 
     async def get_expense(self, expense_id: str) -> Expense:
         expense_orm, split_orms = await self._repo.get_by_id_or_raise(expense_id)
         if expense_orm.deleted_at:
             raise NotFoundError("Expense", expense_id)
-        return self._map_to_domain(expense_orm, split_orms)
+        group = await self._group_repo.get_by_id_or_raise(expense_orm.group_id)
+        return self._map_to_domain(expense_orm, split_orms, group.currency)
 
-    async def list_expenses(
-        self, group_id: str, limit: int = 50, offset: int = 0
-    ) -> list[Expense]:
+    async def list_expenses(self, group_id: str, limit: int = 50, offset: int = 0) -> list[Expense]:
         # Verify group exists
         group = await self._group_repo.get_by_id(group_id)
         if not group:
@@ -193,18 +204,19 @@ class ExpenseService(IExpenseService):
 
         expenses_with_splits = await self._repo.list_by_group(group_id, limit, offset)
         return [
-            self._map_to_domain(expense, splits)
+            self._map_to_domain(expense, splits, group.currency)
             for expense, splits in expenses_with_splits
         ]
 
     @staticmethod
     def _map_to_domain(
-        expense_orm: ExpenseORM, split_orms: Sequence[SplitORM]
+        expense_orm: ExpenseORM, split_orms: Sequence[SplitORM], currency: str = "USD"
     ) -> Expense:
         from modules.expense.models import SplitType
 
         splits = [Split.model_validate(s) for s in split_orms]
         return Expense(
+            currency=currency,
             id=expense_orm.id,
             group_id=expense_orm.group_id,
             paid_by_id=expense_orm.paid_by_id,

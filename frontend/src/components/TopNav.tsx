@@ -82,17 +82,7 @@ export const TopNav: React.FC<TopNavProps> = ({
             >
               FairSplit
             </span>
-            <span
-              className="caption-uppercase"
-              style={{
-                color: 'var(--color-muted)',
-                backgroundColor: 'var(--color-surface-card)',
-                padding: '2px 6px',
-                borderRadius: 'var(--radius-xs)',
-              }}
-            >
-              Editorial
-            </span>
+
           </div>
         </div>
 
