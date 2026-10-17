@@ -32,6 +32,8 @@ async def oauth_sync(
         identity["email"],
         metadata.get("full_name") or metadata.get("name") or identity["email"].split("@")[0],
     )
+    avatar = metadata.get("avatar_url") or metadata.get("picture")
+    user = user.model_copy(update={"avatar_url": avatar if isinstance(avatar, str) else None})
     return OAuthSyncResponse(user=user, tokens=tokens)
 
 

@@ -1,3 +1,4 @@
+import { AccountAvatar, accountName } from './AccountAvatar';
 import React from 'react';
 import { UserCheck, Sun, Moon } from 'lucide-react';
 import type { User } from '../api/client';
@@ -153,28 +154,8 @@ export const TopNav: React.FC<TopNavProps> = ({
               (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--color-surface-card)';
             }}
           >
-            {currentUser?.avatar_url ? (
-              <img
-                src={currentUser.avatar_url}
-                alt={currentUser.name}
-                style={{
-                  width: '26px', height: '26px', borderRadius: '50%',
-                  objectFit: 'cover', border: '1.5px solid var(--color-primary)',
-                }}
-                referrerPolicy="no-referrer"
-              />
-            ) : (
-              <div style={{
-                width: '26px', height: '26px', borderRadius: '50%',
-                backgroundColor: 'var(--color-primary)',
-                color: '#fff', display: 'flex', alignItems: 'center',
-                justifyContent: 'center', fontSize: '11px', fontWeight: 700,
-                flexShrink: 0,
-              }}>
-                {currentUser ? currentUser.name.charAt(0).toUpperCase() : <UserCheck size={13} />}
-              </div>
-            )}
-            <span>{currentUser ? currentUser.name.split(' ')[0] : 'Sign In'}</span>
+            {currentUser ? <AccountAvatar user={currentUser} size={28} /> : <UserCheck size={18} />}
+            <span>{currentUser ? accountName(currentUser) : 'Sign In'}</span>
           </button>
         </div>
       </div>

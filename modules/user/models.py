@@ -67,6 +67,7 @@ class User(BaseModel):
     name: str
     is_active: bool
     created_at: datetime
+    avatar_url: str | None = None
 
     model_config = {"from_attributes": True}  # allows .model_validate(orm_instance)
 

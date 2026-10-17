@@ -222,3 +222,17 @@ def test_currency_selection_is_validated():
 
     with pytest.raises(ValidationError):
         CreateGroupRequest(name="Trip", currency="INVALID")
+
+
+async def test_oauth_sync_includes_verified_profile_photo():
+    from api.routes.auth import oauth_sync
+    from fastapi.security import HTTPAuthorizationCredentials
+    from modules.user.models import User, AuthTokens
+    user = User(id="profile", name="Alex Rivera", email="alex@example.com", is_active=True, created_at=datetime.now(UTC))
+    tokens = AuthTokens(access_token="access", refresh_token="refresh", expires_in=3600)
+    identity = {"email": user.email, "user_metadata": {"full_name": user.name, "picture": "https://example.com/photo.jpg"}}
+    with patch("api.routes.auth.verified_supabase_user", AsyncMock(return_value=identity)), patch("api.routes.auth.UserService") as service:
+        service.return_value.sync_oauth_user = AsyncMock(return_value=(user, tokens))
+        result = await oauth_sync(HTTPAuthorizationCredentials(scheme="Bearer", credentials="verified"), AsyncMock())
+    assert result.user.name == "Alex Rivera"
+    assert result.user.avatar_url == "https://example.com/photo.jpg"

@@ -1,3 +1,4 @@
+import { AccountAvatar, accountName } from './AccountAvatar';
 import React, { useState } from 'react';
 import { X, Key, Shield, UserPlus, LogIn, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { api, type User, API_BASE } from '../api/client';
@@ -179,7 +180,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     onClose();
   };
 
-  const isLoggedIn = api.hasToken() || !!supabaseSession;
+  const isLoggedIn = api.hasToken() && !!currentUser;
   const hasSupabase = isSupabaseConfigured();
 
   return (
@@ -214,27 +215,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               marginBottom: '16px',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{
-                  width: '40px', height: '40px', borderRadius: '50%',
-                  overflow: 'hidden',
-                  backgroundColor: 'var(--color-primary)', color: '#fff',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '16px', fontWeight: 700,
-                }}>
-                  {currentUser.avatar_url ? (
-                    <img
-                      src={currentUser.avatar_url}
-                      alt={currentUser.name}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    currentUser.name.charAt(0).toUpperCase()
-                  )}
-                </div>
+                <AccountAvatar user={currentUser} size={40} />
                 <div>
                   <div style={{ fontWeight: 600, fontSize: '15px', color: 'var(--color-ink)' }}>
-                    {currentUser.name}
+                    {accountName(currentUser)}
                   </div>
                   <div style={{ fontSize: '13px', color: 'var(--color-muted)' }}>
                     {currentUser.email}
