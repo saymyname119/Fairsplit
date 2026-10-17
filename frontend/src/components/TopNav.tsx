@@ -5,6 +5,7 @@ import type { User } from '../api/client';
 
 interface TopNavProps {
   currentUser: User | null;
+  isSigningIn?: boolean;
   isDark: boolean;
   onToggleDark: () => void;
   onOpenAuth: () => void;
@@ -14,6 +15,7 @@ interface TopNavProps {
 
 export const TopNav: React.FC<TopNavProps> = ({
   currentUser,
+  isSigningIn = false,
   isDark,
   onToggleDark,
   onOpenAuth,
@@ -155,7 +157,7 @@ export const TopNav: React.FC<TopNavProps> = ({
             }}
           >
             {currentUser ? <AccountAvatar user={currentUser} size={28} /> : <UserCheck size={18} />}
-            <span>{currentUser ? accountName(currentUser) : 'Sign In'}</span>
+            <span>{currentUser ? accountName(currentUser) : isSigningIn ? 'Signing in…' : 'Sign In'}</span>
           </button>
         </div>
       </div>

@@ -33,6 +33,7 @@ export const App: React.FC = () => {
     return { token };
   });
   const [authError, setAuthError] = useState('');
+  const [isSigningIn, setIsSigningIn] = useState(false);
   const [isDark, toggleDark] = useDarkMode();
 
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -104,6 +105,8 @@ export const App: React.FC = () => {
       controller = new AbortController();
       const signal = controller.signal;
       setSupabaseSession(session);
+      setIsSigningIn(true);
+      setAuthError('');
       try {
         const user = await api.syncOAuthUser(session.access_token, signal);
         if (cancelled || request !== sequence || signal.aborted) return;
@@ -115,6 +118,9 @@ export const App: React.FC = () => {
         setCurrentUser(null);
         localStorage.removeItem('sw_current_user');
         setAuthError(err instanceof Error ? err.message : 'Google sign-in could not be verified. Please try again.');
+        setIsAuthModalOpen(true);
+      } finally {
+        if (!cancelled && request === sequence) setIsSigningIn(false);
       }
     };
     const unsubscribe = onAuthStateChange((session) => { void sync(session); });
@@ -289,6 +295,7 @@ export const App: React.FC = () => {
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       {/* Navigation */}
       <TopNav
+        isSigningIn={isSigningIn}
         currentUser={currentUser}
         isDark={isDark}
         onToggleDark={toggleDark}
@@ -472,6 +479,7 @@ export const App: React.FC = () => {
       {authError && <div role="alert" style={{ padding: 16, color: 'var(--color-error)' }}>{authError}<button onClick={() => setAuthError('')}>Dismiss</button></div>}
       {recovery && <PasswordRecovery token={recovery.token} onClose={() => { setRecovery(null); setIsAuthModalOpen(true); }} />}
       <AuthModal
+        externalError={authError}
         onForgotPassword={() => { setIsAuthModalOpen(false); setRecovery({ token: null }); }}
         isOpen={isAuthModalOpen}
         currentUser={currentUser}
@@ -479,6 +487,7 @@ export const App: React.FC = () => {
         onClose={() => setIsAuthModalOpen(false)}
         onSelectUser={(u) => {
           setCurrentUser(u);
+          if (u) setAuthError('');
           if (u) {
             localStorage.setItem('sw_current_user', JSON.stringify(u));
             api.getGroups().then((fetched) => setGroups(fetched));

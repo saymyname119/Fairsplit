@@ -6,6 +6,7 @@ import { signInWithGoogle, signOutSupabase, isSupabaseConfigured } from '../util
 
 interface AuthModalProps {
   isOpen: boolean;
+  externalError?: string;
   currentUser: User | null;
   supabaseSession?: import('../utils/supabase').Session | null;
   onClose: () => void;
@@ -18,6 +19,7 @@ type AuthMode = 'login' | 'signup';
 
 export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
+  externalError,
   currentUser,
   supabaseSession,
   onClose,
@@ -366,7 +368,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
 
             {/* Error / Success messages */}
-            {error && (
+            {(error || externalError) && (
               <div style={{
                 display: 'flex', alignItems: 'center', gap: '8px',
                 padding: '10px 14px', marginBottom: '16px',
@@ -376,7 +378,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 color: '#dc2626', fontSize: '13px',
               }}>
                 <AlertCircle size={16} />
-                <span>{error}</span>
+                <span>{error || externalError}</span>
               </div>
             )}
             {success && (
