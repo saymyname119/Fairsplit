@@ -125,7 +125,10 @@ async def test_sparse_graph_keeps_shorter_bilateral_plan(ledger_service, for_upd
 
 @pytest.mark.parametrize("zero_only", [False, True])
 async def test_empty_or_zero_balances_need_no_payments(ledger_service, zero_only):
-    rows = [LedgerBalanceORM(group_id="g1", creditor_id="A", debtor_id="B", net_amount=Decimal("0"))] if zero_only else []
+    rows = (
+        [LedgerBalanceORM(group_id="g1", creditor_id="A", debtor_id="B", net_amount=Decimal("0"))]
+        if zero_only else []
+    )
     ledger_service._repo.get_group_balances = AsyncMock(return_value=rows)
 
     result = await ledger_service.get_simplified_balances("g1")
