@@ -318,3 +318,37 @@ async def test_worker_delivery_failure_is_retried(db):
             .all()
         )
         assert len(result) == 1
+
+
+async def test_sparse_bilateral_fallback_can_be_settled_and_retried(db):
+    factory, group, a, b, c = db
+    d, e = str(uuid.uuid4()), str(uuid.uuid4())
+    async with factory() as s:
+        s.add_all([
+            UserORM(id=user, name=user, email=f"{user}@example.com", hashed_password="test")
+            for user in (d, e)
+        ])
+        await s.commit()
+    await seed(factory, group, b, a, "3")
+    await seed(factory, group, b, c, "3")
+    await seed(factory, group, e, d, "4")
+
+    async with factory() as s:
+        plan = await LedgerService(s).get_simplified_balances(group)
+        assert len(plan.simplified) == 3
+        assert {(x.from_user_id, x.to_user_id, x.amount) for x in plan.simplified} == {
+            (a, b, Decimal("3")), (c, b, Decimal("3")), (d, e, Decimal("4")),
+        }
+
+    request = payment(a, b, plan.version, "fallback-retry", "3")
+    async with factory() as s:
+        original = await LedgerService(s).record_settlement(group, request)
+        await s.commit()
+    async with factory() as s:
+        again = await LedgerService(s).record_settlement(group, request)
+        assert again.id == original.id
+        remaining = await LedgerService(s).get_simplified_balances(group)
+        assert remaining.version == plan.version + 1
+        assert remaining.net_by_user[a] == 0
+        assert remaining.net_by_user[b] == 3
+        assert len(remaining.simplified) == 2

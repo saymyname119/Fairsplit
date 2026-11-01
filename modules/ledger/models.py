@@ -129,8 +129,8 @@ class Balance(BaseModel):
 class SimplifiedDebt(BaseModel):
     """
     One transaction in a simplified settlement plan.
-    getSimplifiedBalances() returns a list of these — the minimum set of
-    payments needed to settle the entire group.
+    The settlement plan preserves net balances and uses no more payments than
+    the bilateral debts. It is not guaranteed to be the global minimum.
     """
 
     from_user_id: str  # pays

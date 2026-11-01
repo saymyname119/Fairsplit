@@ -136,6 +136,20 @@ class LedgerService(ILedgerService):
             if remaining_debtor > Decimal("0.0000"):
                 heapq.heappush(debtors, HeapItem(remaining_debtor, largest_debtor.user_id))
 
+        # Greedy matching can add payments to an already sparse debt graph.
+        # Keep the bilateral plan when it is shorter, preserving signed balances.
+        bilateral = [
+            SimplifiedDebt(
+                from_user_id=b.debtor_id if b.net_amount > 0 else b.creditor_id,
+                to_user_id=b.creditor_id if b.net_amount > 0 else b.debtor_id,
+                amount=abs(b.net_amount),
+            )
+            for b in balances
+            if b.net_amount != 0
+        ]
+        if len(bilateral) < len(simplified):
+            simplified = bilateral
+
         return SimplifiedBalanceResult(
             version=await self._repo.version(group_id),
             simplified=simplified,

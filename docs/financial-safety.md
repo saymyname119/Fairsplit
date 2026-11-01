@@ -16,8 +16,11 @@ projection and can be rebuilt from active expense splits and signed settlements.
 Money uses Decimal and NUMERIC(19,4). Editing amounts preserves the original
 split proportions and assigns rounding residuals to the last participant.
 
-Greedy simplification preserves net balances in O(N log N). It reduces transfers
-but does not guarantee the globally minimum number for every possible input.
+Heap-based greedy matching takes O(N log N) after scanning the bilateral balances.
+If the original nonzero bilateral debts need fewer payments, the service returns
+that original plan instead, reversing payment direction for negative balances.
+The selected plan preserves net balances and never has more payments than the
+original bilateral debts, but does not guarantee the globally minimum number.
 Payments from its plan may connect users without a direct bilateral expense.
 
 ## Confirmation and retries
